@@ -5,7 +5,7 @@
 - Repository: `Seraphic8x2244/Outfitter`
 - Current branch: `dev`
 - Current dev version: `0.1.0-dev`
-- Current runtime/code head: `c92a11796e8decb4c43b79b205624e32ceb0ee59`
+- Current runtime/code head: `20879e99be476e03ebcbb7cab6f861a006af1624`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` (repository scaffold only; not a runnable addon release)
 - Latest stable release in this repository: none yet
 - Upstream runtime reference: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
@@ -19,19 +19,15 @@ before editing.
 
 ## Current goal
 
-P1 from `MODERNIZATION.md`: add the smallest ClassicAPI observation/identity bridge
-without changing physical outfit swap behaviour.
-
-The first implementation slice is:
-
-1. add `OutfitterClassicAPI.lua`;
-2. expose exact item GUID/location helpers;
-3. register `PLAYER_EQUIPMENT_CHANGED`;
-4. feed that event into the existing inventory reconciliation path;
-5. keep the legacy cursor equipment executor unchanged.
+Runtime-validate P1 from `MODERNIZATION.md`. The ClassicAPI observation/identity
+bridge is implemented at `20879e99be476e03ebcbb7cab6f861a006af1624`; do not begin
+P2 until this exact runtime slice passes in-game.
 
 ## Recent relevant commits
 
+- `20879e99be476e03ebcbb7cab6f861a006af1624` — added `OutfitterClassicAPI.lua`,
+  exact GUID/location helpers, and `PLAYER_EQUIPMENT_CHANGED` routed into the
+  existing inventory-reconciliation owner. Physical swap semantics are unchanged.
 - `c92a11796e8decb4c43b79b205624e32ceb0ee59` — imported the complete Cosmin runtime
   baseline and required artwork/bindings, added development Title/Version metadata,
   copied the authoritative rulebook, and added the modernization contract.
@@ -44,17 +40,21 @@ None. No runtime behaviour from this repository has been user-tested yet.
 
 ## Implemented but untested
 
-Baseline/setup only:
+P1 is implemented at `20879e99be476e03ebcbb7cab6f861a006af1624`:
 
-- Cosmin runtime source and required BLP artwork imported.
-- `Bindings.xml` imported.
-- `Outfitter.toc` now supplies `## Title: Outfitter-dev` and
-  `## Version: 0.1.0-dev`.
-- `dev_rulebook.md` installed as the workflow authority.
-- `MODERNIZATION.md` records the architecture findings, compatibility constraints,
-  staged plan and first implementation slice.
+- Added `OutfitterClassicAPI.lua` as the narrow extension boundary.
+- Added ClassicAPI availability/event-capability checks.
+- Added exact `C_Item.GetItemGUID` helpers for equipment and bag locations.
+- Added `C_Item.GetItemLocation` reverse lookup.
+- Registered `PLAYER_EQUIPMENT_CHANGED` when ClassicAPI reports the event.
+- Routed that event into the existing `Outfitter_InventoryChanged2` state owner.
+- Kept `UNIT_INVENTORY_CHANGED` during P1 as the legacy/fallback signal.
+- Left all physical equipment execution, stack semantics, SavedVariables and special
+  outfit behaviour unchanged.
 
-No modernization code has been implemented yet.
+Baseline/setup is also complete: Cosmin runtime/assets and `Bindings.xml` are
+imported, `Outfitter.toc` owns `0.1.0-dev`, and the workflow/design docs are in
+place.
 
 ## Static/inspection checks completed
 
@@ -68,6 +68,10 @@ No modernization code has been implemented yet.
 - Inspected ClassicAPI equipment-set, item GUID/location, explicit equipment swap
   and equipment-change event facilities.
 - Inspected pfUI's ClassicAPI Equipment Manager and paperdoll flyouts.
+- Reviewed the P1 commit diff: only `OutfitterClassicAPI.lua`, `Outfitter.toc`, and
+  the two small observation insertions in `Outfitter.lua` changed.
+- Verified P1 adds no new top-level locals to the large legacy `Outfitter.lua`; the
+  adapter is a separate file to avoid increasing Lua 5.0 local-pressure in that chunk.
 
 ## Current issues / risks
 
@@ -92,7 +96,7 @@ None for this repository/version.
 
 ## Next runtime test
 
-After P1 is implemented, test the exact P1 commit in WoW 1.12.1 with ClassicAPI:
+Test exact runtime commit `20879e99be476e03ebcbb7cab6f861a006af1624` in WoW 1.12.1 with ClassicAPI:
 
 - login/reload with no Lua errors;
 - Outfitter opens and existing baseline UI still functions;
@@ -129,7 +133,6 @@ Do not start before the P1 runtime test:
 
 ## Exact next step
 
-Implement P1 only: add a small ClassicAPI adapter plus
-`PLAYER_EQUIPMENT_CHANGED` observation, route it through the existing inventory
-reconciliation path, perform static review, update this file, and stop for runtime
-testing before beginning P2 or changing the equipment executor.
+Runtime-test exact commit `20879e99be476e03ebcbb7cab6f861a006af1624` using the
+checklist above. Record the result here. Do not begin P2 or change the equipment
+executor until that test passes.
