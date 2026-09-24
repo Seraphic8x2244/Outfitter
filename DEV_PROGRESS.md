@@ -14,7 +14,7 @@
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: runtime-test P1 only. Do not begin P2 or change physical equipment execution until P1 passes in-game.
+- Current scope boundary: P1 runtime validation failed on the first test. Fix only the pre-initialization SavedVariables lifecycle failure, then retest P1. Do not begin P2 or change physical equipment execution.
 
 ## Current Design / Development Contract
 
@@ -141,7 +141,8 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - No static inspection is being counted as an in-game test.
 
 ## Current Issues
-- P1 has not yet been runtime-tested.
+- P1 first runtime test failed: `gOutfitter_Settings` was nil in multiple callable paths before initialization completed.
+- Reported nil-value failures in `Outfitter.lua`: line 1820 (`Outfitter_SortOutfits`), 1921 (`Outfitter_Update` options panel), 2399 (`Outfitter_FindOutfitByName`), and 4071 (`Outfitter_AddOutfit`). All converge on pre-initialization access to `gOutfitter_Settings`/`Outfits` rather than four independent faults.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
 - Legacy equipment updates still use the 1.5-second throttle and 0.25-second OnUpdate retry path.
@@ -153,13 +154,13 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 ## Testing
 
 ### Last Runtime Test
-- Version/commit: None
-- Passed: None
-- Failed: None
-- Not tested: Entire imported baseline and P1 runtime delta in this repository.
+- Version/commit: `0.1.0-dev`, runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624` (documentation-only successor handoff `b61bd236f5ff1e1b8ea244022d530ec4d112bc76`).
+- Passed: Not established; testing stopped on repeated Lua errors.
+- Failed: addon lifecycle allows UI/API paths to reach `gOutfitter_Settings` before `Outfitter_Initialize` has created/restored the settings root. User reported nil-value errors at lines 1820, 1921, 2399, and 4071.
+- Not tested: remaining P1 checklist after the initialization failure.
 
 ### Next Runtime Test
-Test exact runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624` on WoW 1.12.1 with ClassicAPI, preferably with brues-code/pfUI present:
+After the P1 initialization-lifecycle fix is committed and statically checked, rerun the same WoW 1.12.1 + ClassicAPI/pfUI checklist, beginning with a fresh login/reload and opening Outfitter before any other interactions:
 
 1. Login/reload with no Lua errors.
 2. Open Outfitter and verify the imported baseline UI still works.
@@ -206,4 +207,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-test exact runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624` using the checklist above. Record the exact results here. Do not begin P2 or change the physical equipment executor until that test passes.
+Trace and fix the single lifecycle defect that permits pre-initialization access to `gOutfitter_Settings`; keep the patch within P1, run the real VanillaTemplate Lua 5.0.2 checker, then retest the full P1 checklist. Do not begin P2 or change the physical equipment executor.
