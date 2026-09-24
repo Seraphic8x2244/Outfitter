@@ -618,6 +618,17 @@ function Outfitter_OnLoad()
 	
 	Outfitter_RegisterEvent(this, "UNIT_INVENTORY_CHANGED", Outfitter_InventoryChanged);
 	
+	-- ClassicAPI supplies the exact paperdoll slot which changed. Keep the
+	-- legacy UNIT_INVENTORY_CHANGED path during P1 and feed both signals into
+	-- the same reconciliation owner; a duplicate follow-up becomes a no-op
+	-- after the current outfit state has already been reconciled.
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.HasPlayerEquipmentChangedEvent
+	and OutfitterClassicAPI.HasPlayerEquipmentChangedEvent() then
+		Outfitter_RegisterEvent(this, "PLAYER_EQUIPMENT_CHANGED", Outfitter_PlayerEquipmentChanged);
+	end
+	
 	-- For indicating which outfits are missing items
 	
 	Outfitter_RegisterEvent(this, "BAG_UPDATE", Outfitter_BagUpdate);
@@ -909,6 +920,13 @@ function Outfitter_InventoryChanged(pEvent)
 		return;
 	end
 	
+	Outfitter_InventoryChanged2();
+end
+
+function Outfitter_PlayerEquipmentChanged()
+	-- ClassicAPI has already narrowed this to a real paperdoll GUID change.
+	-- Reuse Outfitter's existing state owner so external/manual swaps retain
+	-- the legacy temporary-outfit behaviour.
 	Outfitter_InventoryChanged2();
 end
 
