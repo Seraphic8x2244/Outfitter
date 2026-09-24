@@ -15,11 +15,7 @@ jobs:
     steps:
       - name: Check out Outfitter
         uses: actions/checkout@v4
-      - name: Check out VanillaTemplate checker
-        uses: actions/checkout@v4
-        with:
-          repository: Seraphic8x2244/VanillaTemplate
-          ref: dev
-          path: .vanilla-template
+      - name: Fetch VanillaTemplate checker
+        run: git clone --depth 1 --branch dev https://github.com/Seraphic8x2244/VanillaTemplate.git .vanilla-template
       - name: Run real Lua 5.0.2 compiler check
         run: bash .vanilla-template/tools/lua50/check_lua50.sh OutfitterClassicAPI.lua Outfitter.lua OutfitterStrings.lua OutfitterStrings_de.lua OutfitterStrings_fr.lua OutfitterStrings_cn.lua OutfitterStrings_tw.lua OutfitterStrings_kr.lua
