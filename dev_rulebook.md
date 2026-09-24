@@ -4,7 +4,9 @@ This document is the canonical development workflow for Vanilla WoW 1.12.1 addon
 
 It supersedes `DEV_GUIDE.md` once adopted.
 
-Project-specific design documents may add constraints, architecture, protocols, test plans or feature decisions, but they must not silently weaken or contradict this rulebook. If a project intentionally needs an exception, record the exception explicitly in the project's current development status.
+Project-specific development state, architecture decisions, invariants, protocols, test plans, deferred scope and feature decisions belong in `DEV_PROGRESS.md`. If a project intentionally needs an exception to this rulebook, record the exception there explicitly.
+
+Permanent product or user documentation may exist where useful, but it is not a competing development source of truth.
 
 ---
 
@@ -13,14 +15,13 @@ Project-specific design documents may add constraints, architecture, protocols, 
 Use these sources for different kinds of truth:
 
 - `dev_rulebook.md` — canonical development workflow and engineering rules.
-- `DEV_PROGRESS.md` — current project state and fresh-chat recovery source.
-- Project-specific design/specification documents — feature contracts, architecture and domain decisions.
-- Git history — historical implementation record.
+- `DEV_PROGRESS.md` — current project state, live development contract and fresh-chat recovery source.
+- Git history and current code — historical implementation record and implemented reality.
 - The addon `.toc` — version source of truth.
 
 Do not maintain multiple competing live handoff documents.
 
-Legacy `HANDOFF.md` files are predecessors to the `DEV_PROGRESS.md` workflow. Once their still-relevant information has been migrated into `DEV_PROGRESS.md` or an appropriate design document, delete them rather than keeping a second mutable project-status document.
+Legacy `HANDOFF.md` files are predecessors to the `DEV_PROGRESS.md` workflow. Once their still-relevant information has been migrated into `DEV_PROGRESS.md`, delete them rather than keeping a second mutable project-status document.
 
 Git history carries history. `DEV_PROGRESS.md` carries current state.
 
@@ -171,11 +172,10 @@ Before substantial code changes:
 
 1. Read `dev_rulebook.md`.
 2. Read `DEV_PROGRESS.md`.
-3. Read any project-specific design/specification document relevant to the requested slice.
-4. Resolve the documented branch and exact handoff/head commit.
-5. Verify that the actual remote branch head still matches the documented handoff before editing.
-6. Identify the latest stable runtime/release baseline separately from the current development head.
-7. Confirm the requested work does not silently cross a documented deferred boundary or contradict an existing feature contract.
+3. Resolve the documented branch and exact handoff/head commit.
+4. Verify that the actual remote branch head still matches the documented handoff before editing.
+5. Identify the latest stable runtime/release baseline separately from the current development head.
+6. Confirm the requested work does not silently cross a documented deferred boundary or contradict the current development contract.
 
 If the remote branch moved since the handoff:
 
@@ -290,11 +290,11 @@ When a user explicitly authorizes promotion despite known untested work, record 
 
 ## 11. `DEV_PROGRESS.md`
 
-`DEV_PROGRESS.md` is the sole live development handoff/status document.
+`DEV_PROGRESS.md` is the sole live project-development document.
 
-It describes the current development state, not the whole project history.
+It carries the current state **and** the project-specific development context needed to make the next correct decision: active architecture, invariants, protocols, feature decisions, testing state, deferred boundaries and exact next step.
 
-Keep it concise enough that a fresh chat can resume immediately.
+It is not the whole project history. Keep it concise enough that a fresh chat can resume immediately.
 
 At minimum track:
 
@@ -303,6 +303,8 @@ At minimum track:
 - exact current/handoff branch-head commit;
 - latest stable release/runtime version and exact commit;
 - current goal/scope;
+- active architecture/design decisions and invariants that still constrain future work;
+- current protocol/data-model decisions where relevant;
 - recent relevant commits;
 - completed and user-verified work;
 - implemented but untested work;
@@ -344,7 +346,7 @@ Before context loss becomes likely:
 The resume prompt should name:
 
 - repository;
-- canonical status/spec document;
+- `DEV_PROGRESS.md` as the recovery source;
 - branch;
 - exact handoff commit;
 - exact next step;
@@ -395,4 +397,4 @@ Do not casually edit it during ordinary feature work.
 
 Change it when the development standard itself is intentionally being revised.
 
-Project-specific exceptions belong in the project's design/status documentation unless they are meant to become the general standard for future addons.
+Project-specific exceptions belong in `DEV_PROGRESS.md` unless they are meant to become the general standard for future addons.
