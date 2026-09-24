@@ -4964,12 +4964,14 @@ function OutfitterUpdateFrame_OnUpdate(pElapsed)
 end
 
 function OutfitterMinimapButton_MouseDown()
-	-- Remember where the cursor was in case the user drags
+	-- Remember where the cursor was in case the user drags.  Use the button's
+	-- own scale explicitly so this helper is safe when reused outside OnMouseDown.
 	
 	local	vCursorX, vCursorY = GetCursorPosition();
+	local	vScale = OutfitterMinimapButton:GetEffectiveScale();
 	
-	vCursorX = vCursorX / this:GetEffectiveScale();
-	vCursorY = vCursorY / this:GetEffectiveScale();
+	vCursorX = vCursorX / vScale;
+	vCursorY = vCursorY / vScale;
 	
 	OutfitterMinimapButton.CursorStartX = vCursorX;
 	OutfitterMinimapButton.CursorStartY = vCursorY;
@@ -4982,22 +4984,40 @@ function OutfitterMinimapButton_MouseDown()
 end
 
 function OutfitterMinimapButton_DragStart()
+	-- Do not rely on OnMouseDown having run first.  Establish the drag origin
+	-- here so IsDragging can never be true with an incomplete coordinate state.
+	OutfitterMinimapButton_MouseDown();
 	OutfitterMinimapButton.IsDragging = true;
 	OutfitterTimer_AdjustTimer();
 end
 
 function OutfitterMinimapButton_DragEnd()
 	OutfitterMinimapButton.IsDragging = false;
+	OutfitterMinimapButton.CursorStartX = nil;
+	OutfitterMinimapButton.CursorStartY = nil;
+	OutfitterMinimapButton.CenterStartX = nil;
+	OutfitterMinimapButton.CenterStartY = nil;
 	OutfitterTimer_AdjustTimer();
 end
 
 function OutfitterMinimapButton_UpdateDragPosition()
-	-- Remember where the cursor was in case the user drags
+	-- A stale drag flag must never poison the shared equipment update timer.
+	-- Cancel an incomplete drag state rather than doing arithmetic on nil.
+	
+	if not OutfitterMinimapButton.CursorStartX
+	or not OutfitterMinimapButton.CursorStartY
+	or not OutfitterMinimapButton.CenterStartX
+	or not OutfitterMinimapButton.CenterStartY then
+		OutfitterMinimapButton.IsDragging = false;
+		OutfitterTimer_AdjustTimer();
+		return;
+	end
 	
 	local	vCursorX, vCursorY = GetCursorPosition();
+	local	vScale = OutfitterMinimapButton:GetEffectiveScale();
 	
-	vCursorX = vCursorX / this:GetEffectiveScale();
-	vCursorY = vCursorY / this:GetEffectiveScale();
+	vCursorX = vCursorX / vScale;
+	vCursorY = vCursorY / vScale;
 	
 	local	vCursorDeltaX = vCursorX - OutfitterMinimapButton.CursorStartX;
 	local	vCursorDeltaY = vCursorY - OutfitterMinimapButton.CursorStartY;
