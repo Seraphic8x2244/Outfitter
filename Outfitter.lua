@@ -3274,6 +3274,7 @@ function Outfitter_GetBagItemInfo(pBagIndex, pSlotIndex)
 	end
 	
 	vItemInfo.Texture, _, _, vItemInfo.Quality, _ = GetContainerItemInfo(pBagIndex, pSlotIndex);
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, OutfitterClassicAPI.GetBagItemGUID(pBagIndex, pSlotIndex));
 	
 	return vItemInfo;
 end
@@ -3338,8 +3339,12 @@ function Outfitter_GetInventoryItemInfo(pInventorySlot)
 		OutfitterTooltip:Hide();
 		
 		local	vAmmoItemTexture = GetInventoryItemTexture("player", vSlotID);
+		local	vItemInfo = Outfitter_FindAmmoSlotItem(vAmmoItemName, vAmmoItemTexture);
 		
-		return Outfitter_FindAmmoSlotItem(vAmmoItemName, vAmmoItemTexture);
+		-- The legacy ammo fallback identifies a bag stack by name/texture rather than
+		-- the equipped ammo instance, so don't attach that bag stack's GUID to the slot.
+		OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, nil);
+		return vItemInfo;
 	end
 	
 	local	vItemInfo = Outfitter_GetItemInfoFromLink(vItemLink);
@@ -3350,6 +3355,7 @@ function Outfitter_GetInventoryItemInfo(pInventorySlot)
 	
 	vItemInfo.Quality = GetInventoryItemQuality("player", vSlotID);
 	vItemInfo.Texture = GetInventoryItemTexture("player", vSlotID);
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, OutfitterClassicAPI.GetInventoryItemGUID(vSlotID));
 	
 	return vItemInfo;
 end
@@ -3443,11 +3449,13 @@ function Outfitter_NewNakedOutfit(pName)
 	return vOutfit;
 end
 
-function Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode)
-	pOutfit.Items[pSlotName] = {Code = pItemCode, SubCode = pItemSubCode, Name = pItemName, EnchantCode = pItemEnchantCode};
+function Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pItemGUID)
+	local	vItem = {Code = pItemCode, SubCode = pItemSubCode, Name = pItemName, EnchantCode = pItemEnchantCode};
+	pOutfit.Items[pSlotName] = vItem;
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItem, pItemGUID);
 end
 
-function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue)
+function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID)
 	if not pSlotName then
 		Outfitter_ErrorMessage("AddOutfitStatItem: SlotName is nil for "..pItemName);
 		return;
@@ -3458,11 +3466,11 @@ function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode
 		return;
 	end
 	
-	Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode);
+	Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pItemGUID);
 	pOutfit.Items[pSlotName][pStatID] = pStatValue;
 end
 
-function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue)
+function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID)
 	local	vCurrentItem = pOutfit.Items[pSlotName];
 	local	vAlternateSlotName = Outfitter_cHalfAlternateStatSlot[pSlotName];
 	
@@ -3474,16 +3482,16 @@ function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pIte
 		if vCurrentItem
 		and vCurrentItem[pStatID]
 		and vAlternateSlotName then
-			Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, vCurrentItem.Code, vCurrentItem.SubCode, vCurrentItem.Name, vCurrentItem.EnchantCode, pStatID, vCurrentItem[pStatID])
+			Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, vCurrentItem.Code, vCurrentItem.SubCode, vCurrentItem.Name, vCurrentItem.EnchantCode, pStatID, vCurrentItem[pStatID], OutfitterClassicAPI.GetRuntimeItemGUID(vCurrentItem))
 		end
 		
-		Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue);
+		Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID);
 	else
 		if not vAlternateSlotName then
 			return;
 		end
 		
-		return Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue);
+		return Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID);
 	end
 end
 
@@ -3602,11 +3610,15 @@ function Outfitter_GetInventoryOutfit(pName, pOutfit)
 				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, 0, 0, "", 0);
 			end
 		else
+			local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(vItemInfo);
+			
 			if not vExistingItem
 			or vExistingItem.Code ~= vItemInfo.Code
 			or vExistingItem.SubCode ~= vItemInfo.SubCode
 			or vExistingItem.EnchantCode ~= vItemInfo.EnchantCode then
-				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, vItemInfo.Code, vItemInfo.SubCode, vItemInfo.Name, vItemInfo.EnchantCode);
+				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, vItemInfo.Code, vItemInfo.SubCode, vItemInfo.Name, vItemInfo.EnchantCode, vItemGUID);
+			else
+				OutfitterClassicAPI.SetRuntimeItemGUID(vExistingItem, vItemGUID);
 			end
 		end
 	end
@@ -4186,7 +4198,7 @@ function Outfitter_FindAndAddItemsToOutfit(pOutfit, pSlotName, pItems, pEquippab
 			vInventorySlot = vItemLocation.ItemSlotName;
 		end
 		
-		Outfitter_AddOutfitItem(pOutfit, vInventorySlot, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCOde);
+		Outfitter_AddOutfitItem(pOutfit, vInventorySlot, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCOde, OutfitterClassicAPI.GetRuntimeItemGUID(vItemLocation));
 	end
 end
 
@@ -4208,7 +4220,7 @@ function Outfitter_AddItemsWithStatToOutfit(pOutfit, pStatID, pEquippableItems)
 					vSlotName = vItem.ItemSlotName;
 				end
 				
-				Outfitter_AddOutfitStatItemIfBetter(pOutfit, vSlotName, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCode, pStatID, vStatValue);
+				Outfitter_AddOutfitStatItemIfBetter(pOutfit, vSlotName, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCode, pStatID, vStatValue, OutfitterClassicAPI.GetRuntimeItemGUID(vItem));
 			end
 		end
 	end
@@ -5325,6 +5337,14 @@ function Outfitter_PaperDollItemSlotButton_OnClick(pButton, pIgnoreModifiers)
 end
 
 function OutfitterItemList_AddItem(pItemList, pItem)
+	-- Add the item to the GUID index
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if vItemGUID then
+		pItemList.ItemsByGUID[vItemGUID] = pItem;
+	end
+	
 	-- Add the item to the code list
 
 	local	vItemFamily = pItemList.ItemsByCode[pItem.Code];
@@ -5402,10 +5422,28 @@ function OutfitterItemList_FlushInventoryFromEquippableItems()
 end
 
 function OutfitterItemList_New()
-	return {ItemsByCode = {}, ItemsBySlot = {}, InventoryItems = nil, BagItems = {}};
+	return {ItemsByCode = {}, ItemsByGUID = {}, ItemsBySlot = {}, InventoryItems = nil, BagItems = {}};
+end
+
+function OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, pItem)
+	if not pOutfitItem
+	or not pItem then
+		return;
+	end
+	
+	OutfitterClassicAPI.SetRuntimeItemGUID(pOutfitItem, OutfitterClassicAPI.GetRuntimeItemGUID(pItem));
 end
 
 function OutfitterItemList_RemoveItem(pItemList, pItem)
+	-- Remove the item from the GUID index
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if vItemGUID
+	and pItemList.ItemsByGUID[vItemGUID] == pItem then
+		pItemList.ItemsByGUID[vItemGUID] = nil;
+	end
+	
 	-- Remove the item from the code list
 	
 	local	vItems = pItemList.ItemsByCode[pItem.Code];
@@ -5580,6 +5618,17 @@ function OutfitterItemList_FindItemOrAlt(pItemList, pOutfitItem, pMarkAsInUse, p
 		return vItem;
 	end
 	
+	-- If the exact runtime instance exists but is already in use, don't replace
+	-- it with a legacy alias match.
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+	
+	if vItemGUID
+	and pItemList
+	and pItemList.ItemsByGUID[vItemGUID] == vIgnoredItem then
+		return nil, vIgnoredItem;
+	end
+	
 	-- See if there's an alias for the item if it wasn't found
 	
 	local	vAltCode = Outfitter_cItemAliases[pOutfitItem.Code];
@@ -5588,7 +5637,14 @@ function OutfitterItemList_FindItemOrAlt(pItemList, pOutfitItem, pMarkAsInUse, p
 		return nil, vIgnoredItem;
 	end
 	
-	return OutfitterItemList_FindItem(pItemList, {Code = vAltCode}, pMarkAsInUse, true);
+	local	vAltItem, vAltIgnoredItem = OutfitterItemList_FindItem(pItemList, {Code = vAltCode}, pMarkAsInUse, true);
+	
+	if vAltItem then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vAltItem);
+		return vAltItem;
+	end
+	
+	return nil, vAltIgnoredItem or vIgnoredItem;
 end
 
 function OutfitterItemList_FindItem(pItemList, pOutfitItem, pMarkAsInUse, pAllowSubCodeWildcard)
@@ -5606,11 +5662,25 @@ function OutfitterItemList_FindItem(pItemList, pOutfitItem, pMarkAsInUse, pAllow
 end
 
 function OutfitterItemList_FindAllItemsOrAlt(pItemList, pOutfitItem, pAllowSubCodeWildcard, rItems)
+	if pItemList then
+		local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+		local	vGUIDItem = vItemGUID and pItemList.ItemsByGUID[vItemGUID];
+		
+		if vGUIDItem then
+			table.insert(rItems, vGUIDItem);
+			return 1;
+		end
+	end
+	
 	local	vNumItems = OutfitterItemList_FindAllItems(pItemList, pOutfitItem, pAllowSubCodeWildcard, rItems);
 	local	vAltCode = Outfitter_cItemAliases[pOutfitItem.Code];
 	
 	if vAltCode then
 		vNumItems = vNumItems + OutfitterItemList_FindAllItems(pItemList, {Code = vAltCode}, true, rItems);
+	end
+	
+	if vNumItems == 1 then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, rItems[1]);
 	end
 	
 	return vNumItems;
@@ -5645,6 +5715,17 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 		return nil, nil, nil, nil;
 	end
 	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+	local	vGUIDItem = vItemGUID and pItemList.ItemsByGUID[vItemGUID];
+	
+	if vGUIDItem then
+		if vGUIDItem.IgnoreItem then
+			return nil, nil, nil, vGUIDItem;
+		end
+		
+		return vGUIDItem, nil, nil, nil;
+	end
+	
 	local	vItemFamily = pItemList.ItemsByCode[pOutfitItem.Code];
 	
 	if not vItemFamily then
@@ -5662,6 +5743,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 			if vItem.IgnoreItem then
 				vFoundIgnoredItem = vItem;
 			else
+				OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
 				return vItem, vIndex, vItemFamily, nil;
 			end
 		
@@ -5674,6 +5756,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 				if vItem.IgnoreItem then
 					vFoundIgnoredItem = vItem;
 				else
+					OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
 					return vItem, vIndex, vItemFamily;
 				end
 			
@@ -5698,6 +5781,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 	
 	if vNumItemsFound == 1
 	and not vBestMatch.IgnoreItem then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vBestMatch);
 		return vBestMatch, vBestMatchIndex, vItemFamily, nil;
 	end
 	
@@ -5813,6 +5897,14 @@ function OutfitterItemList_ItemsAreSame(pEquippableItems, pItem1, pItem2)
 		return false;
 	end
 	
+	local	vItemGUID1 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem1);
+	local	vItemGUID2 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem2);
+	
+	if vItemGUID1
+	and vItemGUID2 then
+		return vItemGUID1 == vItemGUID2;
+	end
+	
 	if pItem1.Code == 0 then
 		return pItem2.Code == 0;
 	end
@@ -5862,6 +5954,7 @@ function OutfitterItemList_InventorySlotContainsItem(pEquippableItems, pInventor
 		-- If there's only one of that item then the enchant code
 		-- is disregarded so just make sure it's in the slot
 		
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItems[1]);
 		return vItems[1].SlotName == pInventorySlot, vItems[1];
 	else
 		-- See if one of the items is in the slot
@@ -5871,7 +5964,12 @@ function OutfitterItemList_InventorySlotContainsItem(pEquippableItems, pInventor
 				-- Must match the enchant code if there are multiple items
 				-- in order to be considered a perfect match
 				
-				return vItem.EnchantCode == pOutfitItem.EnchantCode, vItem;
+				if vItem.EnchantCode == pOutfitItem.EnchantCode then
+					OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
+					return true, vItem;
+				end
+				
+				return false, vItem;
 			end
 		end
 		

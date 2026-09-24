@@ -6,6 +6,24 @@
 
 OutfitterClassicAPI = {};
 
+local gOutfitterClassicAPI_RuntimeItemGUIDs = setmetatable({}, {__mode = "k"});
+
+function OutfitterClassicAPI.SetRuntimeItemGUID(pItem, pItemGUID)
+	if not pItem then
+		return;
+	end
+
+	gOutfitterClassicAPI_RuntimeItemGUIDs[pItem] = pItemGUID;
+end
+
+function OutfitterClassicAPI.GetRuntimeItemGUID(pItem)
+	if not pItem then
+		return nil;
+	end
+
+	return gOutfitterClassicAPI_RuntimeItemGUIDs[pItem];
+end
+
 function OutfitterClassicAPI.IsAvailable()
 	return type(C_Item) == "table"
 	and type(C_Item.GetItemGUID) == "function"
