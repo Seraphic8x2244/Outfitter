@@ -14,7 +14,7 @@
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: clean SavedVariables startup and outfit creation now work, but P1 remains blocked by a repeated stale minimap-drag timer error found during rapid outfit switching. The drag-state fix is implemented and Lua 5.0.2-checked. Retest P1 only; do not begin P2 or change physical equipment execution until it passes.
+- Current scope boundary: clean SavedVariables startup, outfit creation, and rapid outfit switching now work without Lua errors after the drag-state fix. Continue the remaining P1 runtime checklist only; do not begin P2 or change physical equipment execution until P1 passes.
 
 ## Current Design / Development Contract
 
@@ -143,7 +143,10 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — initial repository scaffold on `main`.
 
 ## Completed / User-Verified
-- None. No runtime behaviour from this repository has yet been user-tested.
+- Clean SavedVariables startup produces a healthy named default outfit list.
+- Outfitter opens normally after initialization.
+- Creating two outfits works.
+- Rapid switching between the two created outfits and back works with no Lua errors on runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`; the prior repeated `CursorStartX` timer error did not recur.
 
 ## Implemented / Awaiting Runtime Test
 - Baseline runtime is imported from CosminPOP/Outfitter.
@@ -152,7 +155,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented; current runtime/code head is `dcc3f3572c201a568eb5471ebf52019fb42feefe`.
 - Clean SavedVariables startup and creation of two outfits are user-verified on the preceding runtime.
-- The drag-state fix is statically/compiler checked but has not yet been user-tested.
+- The drag-state fix is statically/compiler checked and its rapid-switching failure case is user-verified fixed. A direct minimap-button drag cycle is still untested.
 - No modernization beyond P1 has been implemented.
 
 ## Static / Automated Checks
@@ -172,7 +175,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 
 ## Current Issues
 - The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults; clean SavedVariables startup now passes that point.
-- Previous P1 blocker: stale/incomplete minimap drag state could leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly called `OutfitterMinimapButton_UpdateDragPosition`, faulting on nil arithmetic. Fix is implemented at `dcc3f3572c201a568eb5471ebf52019fb42feefe` and awaits runtime retest.
+- Previous P1 blocker: stale/incomplete minimap drag state could leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly called `OutfitterMinimapButton_UpdateDragPosition`, faulting on nil arithmetic. The rapid outfit-switching reproduction now passes on `dcc3f3572c201a568eb5471ebf52019fb42feefe`; only a direct minimap-drag lifecycle check remains.
 - The lifecycle/preflight hardening through `9e7f75634072600ec470fa00e21da84eeeb61526` is implemented and compiler-checked but still needs the same user runtime test, especially the first-use/no-SavedVariables and existing/partial-SavedVariables paths.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
@@ -185,24 +188,22 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 ## Testing
 
 ### Last Runtime Test
-- Version/commit: `0.1.0-dev`, runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526`.
-- Passed: clean SavedVariables startup now produces a healthy default outfit list; Outfitter opens; user successfully created two outfits.
-- Failed: rapid outfit switching woke the shared update timer while `OutfitterMinimapButton.IsDragging` was true but `CursorStartX` was nil, causing repeated arithmetic errors in `OutfitterMinimapButton_UpdateDragPosition` (reported at current line 5002).
-- Not tested/blocked: remaining P1 checklist until the repeated timer error is fixed.
+- Version/commit: `0.1.0-dev`, runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`.
+- Passed: repeated rapid switching between the two created outfits and back; no Lua errors; prior repeated `CursorStartX` timer failure did not recur.
+- Previously established in the same P1 cycle: clean SavedVariables startup, healthy named default outfit list, Outfitter opens, and two outfits can be created.
+- Failed: None in this retest.
+- Not tested: direct minimap-button drag cycle, manual slot changes, pfUI-driven changes, external/manual temporary-state ownership, partial/special outfits, reload persistence, and duplicate-event/reconciliation symptoms.
 
 ### Next Runtime Test
-Test exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe` (or the documentation-only handoff successor containing the same runtime tree) on WoW 1.12.1 + ClassicAPI/pfUI:
+Continue on exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`:
 
-1. Login/reload with no Lua errors; specifically verify none of the previous settings-nil failures recur.
-2. Open Outfitter and confirm the current clean database still shows normal named outfits.
-3. Rapidly switch between the two created outfits and back several times; verify the old line-5002 `CursorStartX` error does not recur and the error does not start firing repeatedly.
-4. If convenient, click/drag the minimap button once and then repeat rapid outfit switching, to exercise the repaired drag lifecycle.
-5. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
-6. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
-7. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
-8. Exercise an existing partial and special outfit and verify they still use the unchanged legacy executor.
-9. `/reload` and confirm the two created outfit names/states persist correctly.
-10. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
+1. Click/drag the Outfitter minimap button once, release it, then rapidly switch outfits again; verify no drag/timer error.
+2. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
+3. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
+4. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
+5. Exercise an existing partial and special outfit and verify they still use the unchanged legacy executor.
+6. `/reload` and confirm the two created outfit names/states persist correctly.
+7. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
@@ -240,4 +241,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-test exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`, beginning with repeated rapid switching between the two newly created outfits and one minimap-button drag cycle. Record the result here. Do not begin P2 or change the physical equipment executor until P1 passes.
+Continue the remaining P1 runtime checklist on `dcc3f3572c201a568eb5471ebf52019fb42feefe`: first do one minimap-button drag/release followed by rapid outfit switching, then manual/pfUI slot changes, partial/special outfits, and reload persistence. Do not begin P2 or change the physical equipment executor until P1 passes.
