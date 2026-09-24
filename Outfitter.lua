@@ -944,8 +944,14 @@ end
 
 function Outfitter_PlayerEquipmentChanged()
 	-- ClassicAPI has already narrowed this to a real paperdoll GUID change.
-	-- Reuse Outfitter's existing state owner so external/manual swaps retain
-	-- the legacy temporary-outfit behaviour.
+	-- Let the adapter resolve any Outfitter-owned P3 transaction marker first,
+	-- then reuse the existing reconciliation owner so external/manual swaps
+	-- retain the legacy temporary-outfit behaviour.
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.ObservePlayerEquipmentChanged then
+		OutfitterClassicAPI.ObservePlayerEquipmentChanged(arg1);
+	end
+	
 	Outfitter_InventoryChanged2();
 end
 
@@ -2962,6 +2968,25 @@ function Outfitter_OptimizeEquipmentChangeList(pEquipmentChangeList)
 end
 
 function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlots, pExpectedEquippableItems)
+	-- P3 slice 1: a single exact equip/replacement can use ClassicAPI's
+	-- cursor-free explicit-slot swap safely. Keep multi-change outfits on the
+	-- legacy loop until Outfitter owns sequencing across server acknowledgements;
+	-- issuing several direct swaps against stale client locations is not safe.
+	if table.getn(pEquipmentChangeList) == 1 then
+		local vEquipmentChange = pEquipmentChangeList[1];
+		
+		if vEquipmentChange.ItemLocation
+		and OutfitterClassicAPI
+		and OutfitterClassicAPI.EquipItemToSlot
+		and OutfitterClassicAPI.EquipItemToSlot(vEquipmentChange.ItemLocation, vEquipmentChange.SlotID) then
+			if pExpectedEquippableItems then
+				OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
+			end
+			
+			return;
+		end
+	end
+	
 	for vChangeIndex, vEquipmentChange in pEquipmentChangeList do
 		if vEquipmentChange.ItemLocation then
 			Outfitter_PickupItemLocation(vEquipmentChange.ItemLocation);
