@@ -114,8 +114,10 @@ Rules:
 
 - Never hardcode the addon version separately in Lua.
 - Use the real addon/folder name with `GetAddOnMetadata`.
+- Every addon/runtime change must increment the numeric version in the addon `.toc` before that build is handed off for testing or use.
+- Documentation-only/status-only commits do not require a version bump because they do not change the addon build.
 - Development builds use `-dev`.
-- Do not invent `-dev1`, `-dev2`, etc.; commits identify individual development states.
+- Do not invent `-dev1`, `-dev2`, etc.; increment the numeric version and keep the `-dev` suffix.
 
 Development:
 
