@@ -8,13 +8,13 @@
 - Version: `0.1.0-dev`
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `dcc3f3572c201a568eb5471ebf52019fb42feefe`
+- Current runtime/code head: `2143a0cd29cc50a8e52d45040adacb299bf133cd`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: P1 is user-verified passed on WoW 1.12.1 with ClassicAPI/pfUI after a clean SavedVariables reset. The next implementation stage is P2 item-identity modernization. Do not change the physical equipment executor yet; that remains P3.
+- Current scope boundary: P1 is user-verified passed on WoW 1.12.1 with ClassicAPI/pfUI after a clean SavedVariables reset. P2 runtime item-identity modernization is implemented and compiler-checked but has not yet been tested in-game. Do not begin P3 until the P2 runtime gate is complete.
 
 ## Current Design / Development Contract
 
@@ -43,8 +43,8 @@
 
 ### Protocol / Data Model
 - Per-character SavedVariables remain rooted at `gOutfitter_Settings`.
-- Existing saved outfit records remain compatible; P1 does not persist ClassicAPI GUIDs.
-- ClassicAPI per-instance GUIDs are the intended future runtime identity for exact physical-item matching.
+- Existing saved outfit records remain compatible; P2 keeps ClassicAPI GUIDs in a transient weak-key runtime side-map rather than adding fields to saved outfit tables.
+- ClassicAPI per-instance GUIDs are now preferred for exact physical-item matching when present; legacy `Code` / `SubCode` / `EnchantCode` matching remains the fallback and hydrates runtime GUID identity after a successful legacy match.
 - `C_Item.GetItemGUID(itemLocation)` and `C_Item.GetItemLocation(itemGUID)` are the preferred exact identity/location primitives.
 - `PLAYER_EQUIPMENT_CHANGED(equipmentSlot, hasCurrent)` is the preferred precise paperdoll observation signal.
 - `C_EquipmentSet.*` is a GUID-backed flat-set facility, not Outfitter's authoritative outfit database.
@@ -130,7 +130,20 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - Detects and cancels impossible stale drag state before any arithmetic, so the shared equipment update timer cannot repeatedly fault on nil coordinates.
 - Does not alter equipment execution or outfit semantics.
 
+### Active Implementation Decision: P2
+P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`:
+- Physical inventory/bag item records receive ClassicAPI per-instance GUIDs when the API can resolve them.
+- Runtime GUID associations live in `OutfitterClassicAPI.lua` in a weak-key side-map; no GUID field was added to persisted outfit records or the SavedVariables schema.
+- The equippable-item cache now indexes live physical items by GUID in addition to the legacy code/slot indexes.
+- Matching prefers an exact GUID hit when both the outfit-side runtime identity and live item are available.
+- Existing saved outfits and any location/API gaps continue through the original code/subcode/enchant fallback; a successful fallback match hydrates the outfit item's transient GUID for later exact matching in the same session.
+- Inventory snapshots refresh runtime GUID identity even when the legacy item fields are unchanged, so same-link physical instances can be distinguished after they move during the session.
+- The legacy ammo-slot name/texture fallback intentionally does not inherit the GUID of the bag stack used to identify it.
+- ClassicAPI's reverse `C_Item.GetItemLocation(itemGUID)` helper was inspected but is not used to change equipment execution in P2; physical execution remains P3.
+- The physical executor, 1.5-second throttle, Riding/special-outfit semantics, paperdoll hook, TOC version, and SavedVariables structure are unchanged.
+
 ## Recent Relevant Commits
+- `2143a0cd29cc50a8e52d45040adacb299bf133cd` — implemented P2 transient ClassicAPI GUID identity, exact runtime matching, and legacy fallback hydration without changing SavedVariables or the physical executor.
 - `dcc3f3572c201a568eb5471ebf52019fb42feefe` — fixed stale/incomplete minimap drag state so it cannot repeatedly crash the shared update timer.
 - `0e98276856f64c975e5eb3c9a055e04552d84c57` — recorded clean-start/outfit-creation success and the repeated minimap timer failure.
 - `9e7f75634072600ec470fa00e21da84eeeb61526` — completed P1 preflight hardening by normalizing legacy/partial settings, guarding pre-init public/keybind/slash lookup paths, and hiding the minimap button until initialization.
@@ -155,7 +168,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented and user-verified.
-- No modernization beyond P1 has been implemented yet.
+- P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is awaiting in-game validation.
 
 ## Static / Automated Checks
 - Imported runtime Lua/XML/localization files were verified content-identical to Cosmin's inspected head blobs; project metadata/docs are the intentional differences.
@@ -169,11 +182,14 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - Static review of the initialization call chain and all 98 direct `gOutfitter_Settings` references identified and closed the remaining defensible pre-init/partial-settings hazards without altering outfit semantics.
 - Real Lua 5.0.2 compiler check passed all 8 runtime Lua files after the full preflight hardening pass.
 - Real Lua 5.0.2 compiler check also passed all 8 runtime Lua files after the drag-state fix. That successful run was on validation commit `1f34cf97f09cc3cb55b6666f320afe57e0e058bf`, whose runtime files match runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`; the temporary workflow was removed afterward at `ea16a761de1c2d857ec63e34ce8d85c2d676f35c`.
+- P2 diff review confirmed only `Outfitter.lua` and `OutfitterClassicAPI.lua` changed; no TOC, XML, physical-executor, throttle, Riding/special-outfit, or paperdoll-hook code was changed.
+- The verified Lua 5.0.2 compiler path used during P1 was rerun against the P2 candidate and passed all 8 runtime Lua files in GitHub Actions run `36036193227`; the checked runtime files are exactly code commit `2143a0cd29cc50a8e52d45040adacb299bf133cd` plus the temporary validation workflow.
 - ClassicAPI adapter capability checks were re-reviewed against brues-code/ClassicAPI's documented `C_EventUtils.IsEventValid` and `PLAYER_EQUIPMENT_CHANGED` support.
 - No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
 - P1 is currently passing in-game after a clean SavedVariables reset.
+- P2's new runtime GUID identity/matching delta is compiler-checked but not yet user-tested in-game; do not treat it as stable or start P3 yet.
 - The original pre-existing Outfitter SavedVariables produced malformed/blank outfit names and odd disabled states. Deleting those SavedVariables fixed the problem; the old file is no longer available, so migration compatibility with that unknown prior schema cannot be diagnosed or claimed.
 - The earlier pre-initialization settings nil failures and repeated minimap-drag timer failure are fixed and user-verified not to recur in the tested setup.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
@@ -196,12 +212,17 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 
 ### Next Runtime Test
 - P1 runtime gate is complete.
-- The next runtime test belongs to P2 after exact GUID identity is added to runtime item matching while preserving legacy SavedVariables fallback semantics.
+- Runtime-test P2 on `0.1.0-dev` code head `2143a0cd29cc50a8e52d45040adacb299bf133cd`.
+- Confirm normal outfit switching, rapid switching, manual equipment changes, pfUI-driven changes, partial/special outfits, and reload persistence still behave as in the P1 known-good baseline.
+- Where practical, test two physical copies with identical legacy identity fields and confirm Outfitter continues to follow the intended physical instance after one copy moves during the same session. If an exact duplicate is not readily available, record that case as untested rather than blocking the rest of P2 validation.
+- Confirm existing SavedVariables load without any GUID field/schema migration and that legacy fallback still resolves outfits after reload.
+- Exercise bank-open matching once if practical; P2 must fall back cleanly anywhere ClassicAPI cannot provide a live GUID.
+- Do not begin P3 from this test; report results against P2 first.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
-- **P2 — item identity modernization:** augment runtime item records with ClassicAPI GUID identity and prefer exact GUID matching while preserving legacy SavedVariables migration/fallback matching.
+- **P2 — item identity modernization:** implemented and compiler-checked at `2143a0cd29cc50a8e52d45040adacb299bf133cd`; awaiting user runtime validation. Runtime GUID identity is transient and exact when available, with unchanged legacy SavedVariables/fallback matching.
 - **P3 — cursor-free executor:** replace Outfitter-controlled cursor swaps with ClassicAPI exact-item/explicit-slot swapping; introduce Outfitter transaction ownership; remove legacy timing constraints only after runtime evidence proves the replacement boundary.
 - **P4 — automatic-state modernization:** replace tooltip parsing/broad polling for Riding, auras, forms, Swimming, and similar states only where a verified ClassicAPI fact exists; preserve fallback where needed.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
@@ -233,4 +254,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Begin P2 item-identity modernization in a fresh chat: inspect the current legacy item-record construction/matching paths and ClassicAPI GUID/location helpers, then add exact runtime GUID identity where available while preserving existing SavedVariables and legacy fallback matching. Keep the physical equipment executor unchanged; that remains P3.
+Runtime-test the P2 item-identity modernization on WoW 1.12.1 with ClassicAPI and pfUI, using the focused checklist above. Record any exact-duplicate identity case that cannot be exercised as untested rather than inferred. If P2 passes, update this document with the user-verified result and only then plan P3; do not change the physical executor, throttle, Riding/special-outfit semantics, or paperdoll hook during the P2 gate.
