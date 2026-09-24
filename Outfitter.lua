@@ -1046,6 +1046,10 @@ function Outfitter_OutfitIsAmmoOnly(pOutfit)
 end
 
 function Outfitter_ExecuteCommand(pCommand)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	vCommands =
 	{
 		wear = {useOutfit = true, func = Outfitter_WearOutfit},
@@ -1386,6 +1390,11 @@ function Outfitter_GetCategoryOrder()
 end
 
 function Outfitter_GetOutfitsByCategoryID(pCategoryID)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
+		return nil;
+	end
+	
 	return gOutfitter_Settings.Outfits[pCategoryID];
 end
 
@@ -2350,6 +2359,10 @@ local	gOutfitter_LastBindingTime = nil;
 local	Outfitter_cMinBindingTime = 0.75;
 
 function Outfitter_WearBoundOutfit(pBindingIndex)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	-- Check for the user spamming the button so prevent the outfit from
 	-- toggling if they're panicking
 	
@@ -2400,6 +2413,11 @@ function Outfitter_WearBoundOutfit(pBindingIndex)
 end
 
 function Outfitter_FindOutfit(pOutfit)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
+		return nil, nil;
+	end
+	
 	for vCategoryID, vOutfits in gOutfitter_Settings.Outfits do
 		for vOutfitIndex, vOutfit in vOutfits do
 			if vOutfit == pOutfit then
@@ -2412,7 +2430,9 @@ function Outfitter_FindOutfit(pOutfit)
 end
 
 function Outfitter_FindOutfitByName(pName)
-	if not pName
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not pName
 	or pName == "" then
 		return nil;
 	end
@@ -2434,7 +2454,10 @@ end
 -- Fishing Buddy might use it to locate specific generated outfits
 
 function Outfitter_FindOutfitByStatID(pStatID)
-	if not pStatID or pStatID == "" then
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not pStatID
+	or pStatID == "" then
 		return nil;
 	end
 
@@ -3755,6 +3778,12 @@ function Outfitter_SetSlotEnable(pSlotName, pEnable)
 end
 
 function Outfitter_GetSpecialOutfit(pSpecialID)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not gOutfitter_Settings.Outfits.Special then
+		return nil;
+	end
+	
 	for vOutfitIndex, vOutfit in gOutfitter_Settings.Outfits.Special do
 		if vOutfit.SpecialID == pSpecialID then
 			return vOutfit;
@@ -4083,6 +4112,10 @@ function Outfitter_DeleteOutfit(pOutfit)
 end
 
 function Outfitter_AddOutfit(pOutfit)
+	if not gOutfitter_Settings then
+		return nil;
+	end
+	
 	local	vCategoryID;
 	
 	if pOutfit.SpecialID then
@@ -4199,10 +4232,18 @@ function Outfitter_Initialize()
 	if not gOutfitter_Settings then
 		gOutfitter_Settings = {};
 		gOutfitter_Settings.Version = 7;
+	end
+	
+	-- Normalize structural fields before any migration, UI or special-outfit
+	-- code consumes them.  Older or partial SavedVariables must not turn a
+	-- valid upgrade into a chain of nil-table failures.
+	
+	if not gOutfitter_Settings.Options then
 		gOutfitter_Settings.Options = {};
+	end
+	
+	if not gOutfitter_Settings.LastOutfitStack then
 		gOutfitter_Settings.LastOutfitStack = {};
-		gOutfitter_Settings.HideHelm = {};
-		gOutfitter_Settings.HideCloak = {};
 	end
 	
 	if not gOutfitter_Settings.HideHelm then
@@ -4211,6 +4252,14 @@ function Outfitter_Initialize()
 	
 	if not gOutfitter_Settings.HideCloak then
 		gOutfitter_Settings.HideCloak = {};
+	end
+	
+	if gOutfitter_Settings.Outfits then
+		for vCategoryIndex, vCategoryID in gOutfitter_cCategoryOrder do
+			if not gOutfitter_Settings.Outfits[vCategoryID] then
+				gOutfitter_Settings.Outfits[vCategoryID] = {};
+			end
+		end
 	end
 	
 	--
@@ -4656,7 +4705,8 @@ function Outfitter_GetOutfitFromListItem(pItem)
 		return nil;
 	end
 	
-	if not gOutfitter_Settings.Outfits then
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
 		return nil;
 	end
 	
