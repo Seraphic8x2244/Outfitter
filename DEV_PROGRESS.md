@@ -5,16 +5,16 @@
 ## Current
 - Repository: `Seraphic8x2244/Outfitter`
 - Branch: `dev`
-- Version: `0.1.0-dev`
+- Version: `0.1.1-dev`
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`
+- Current runtime/code head: `026bd1164d817dd6e4775f76df40dd293b2492fa`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: P1 and P2 are user-accepted on WoW 1.12.1 with ClassicAPI/pfUI. P2 exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd` passed normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema; bank-open, focused partial/special rechecks, and a true same-legacy-identity duplicate-instance case remain validation debt. P3 slice 1 is now implemented and compiler-checked at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`: only a single exact equip/replacement uses ClassicAPI's cursor-free explicit-slot swap, with an Outfitter-owned acknowledgement marker. Multi-change outfits, explicit unequips, bank-sourced items, the 1.5-second throttle, and the 0.25-second retry loop remain on the legacy path pending focused runtime validation.
+- Current scope boundary: P1 and P2 are user-accepted on WoW 1.12.1 with ClassicAPI/pfUI. P2 exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd` passed normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema; bank-open, focused partial/special rechecks, and a true same-legacy-identity duplicate-instance case remain validation debt. P3 slice 1 executor logic is implemented at `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`; the current testable runtime/code head is `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`, which additionally fixes Outfitter's displayed version to read from the TOC. Only a single exact equip/replacement uses ClassicAPI's cursor-free explicit-slot swap, with an Outfitter-owned acknowledgement marker. Multi-change outfits, explicit unequips, bank-sourced items, the 1.5-second throttle, and the 0.25-second retry loop remain on the legacy path pending focused runtime validation.
 
 ## Current Design / Development Contract
 
@@ -154,6 +154,9 @@ P3 slice 1 is implemented at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae397399
 - Stack compilation, special/Riding semantics, paperdoll integration, bank deposit/withdraw execution, SavedVariables, and UI behaviour are otherwise unchanged.
 
 ## Recent Relevant Commits
+- `026bd1164d817dd6e4775f76df40dd293b2492fa` — fixed the user-visible Outfitter version to read `GetAddOnMetadata("Outfitter", "Version")` instead of hardcoded upstream `1.4`; runtime files now identify the P3 test build as `0.1.1-dev`.
+- `adc23b441413e39bd85ab736fe653168753139ee` — bumped the current P3 test build from `0.1.0-dev` to `0.1.1-dev`.
+- `dda160ba0101cb4e2e8758b7061c058873fb0efe` — clarified the authoritative versioning rule: every addon/runtime change increments the numeric TOC version; documentation-only/status-only commits do not.
 - `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` — completed P3 slice 1 runtime delta by excluding bank-sourced items from the direct exact-slot path.
 - `2644ee6c3c406077994136347972e85b2ff2e807` — routed single-change equip/replacement lists through the P3 ClassicAPI adapter and observed owned acknowledgements before normal reconciliation.
 - `9ec1c61c1b2d378bc5b10fc073da40ced3757931` — added the P3 exact GUID/explicit-slot adapter and owned equipment-change marker.
@@ -182,10 +185,10 @@ P3 slice 1 is implemented at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae397399
 - Baseline runtime is imported from CosminPOP/Outfitter.
 - Required addon-local BLP artwork is present.
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
-- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
+- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.1-dev`. `OutfitterStrings.lua` now reads that version through `GetAddOnMetadata("Outfitter", "Version")`; the old hardcoded upstream `1.4` display value is removed.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented and user-verified.
 - P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is user-accepted after successful normal/rapid outfit switching, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema. Bank-open matching, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case remain explicit validation debt.
-- P3 slice 1 is implemented and awaiting runtime test at `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`: one exact non-bank equip/replacement change can use ClassicAPI's cursor-free GUID/explicit-slot path. Multi-change, unequip, bank-sourced, and no-GUID cases remain on the legacy executor.
+- P3 slice 1 is implemented and awaiting runtime test. Executor logic is `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`; the exact testable runtime/code head is `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`, after the TOC bump and metadata-driven display-version correction. One exact non-bank equip/replacement change can use ClassicAPI's cursor-free GUID/explicit-slot path. Multi-change, unequip, bank-sourced, and no-GUID cases remain on the legacy executor.
 
 ## Static / Automated Checks
 - Imported runtime Lua/XML/localization files were verified content-identical to Cosmin's inspected head blobs; project metadata/docs are the intentional differences.
@@ -204,7 +207,8 @@ P3 slice 1 is implemented at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae397399
 - ClassicAPI adapter capability checks were re-reviewed against brues-code/ClassicAPI's documented `C_EventUtils.IsEventValid` and `PLAYER_EQUIPMENT_CHANGED` support.
 - For P3, pinned ClassicAPI source `fde3beca9dba18e7327802eb094b5bff81f39d47` was inspected: explicit-slot `C_Item.EquipItemByName(item, dstSlot)` uses the cursor-free direct swap primitive, accepts an exact GUID/item location, and server/client location lag between sequential swaps is a real concern that requires owned sequencing rather than a naive loop replacement.
 - P3 diff review from P2-accepted head `4e703b53b7d70a151cbec49cc2288d85427afc80` to runtime/code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` changes only `Outfitter.lua` (+27/-2) and `OutfitterClassicAPI.lua` (+54); no TOC, XML, stack-model, throttle, Riding/special-outfit, paperdoll-hook, or SavedVariables changes are present.
-- Real Lua 5.0.2 compiler validation passed all 8 runtime Lua files in GitHub Actions run `36072172938` on validation commit `b24ba181d467e2a7cbf600563331b387d6fdd32e`; those runtime files exactly contain code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` plus only the temporary validation workflow, which was removed at `5904ca337211a488900d7a696181f998d5595a31`.
+- Real Lua 5.0.2 compiler validation passed all 8 runtime Lua files in GitHub Actions run `36072172938` on validation commit `b24ba181d467e2a7cbf600563331b387d6fdd32e`; those runtime files exactly contain P3 executor code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` plus only the temporary validation workflow, which was removed at `5904ca337211a488900d7a696181f998d5595a31`.
+- After correcting version ownership/display, real Lua 5.0.2 compiler validation passed all 8 runtime Lua files again in GitHub Actions run `36072774529` on validation commit `e687d60acda216ecb0b5a8a09b4a073c9d7c8219`; its addon runtime files match exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`. The temporary workflow was removed at `941a09ec5e9a4dcc6fe1fd1ba273fb9700aaefa2`.
 - No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
@@ -233,7 +237,7 @@ P3 slice 1 is implemented at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae397399
 
 ### Next Runtime Test
 - P1 and P2 are accepted. Preserve unresolved P2 cases as validation debt rather than retroactively treating them as passed.
-- Runtime-test P3 slice 1 on `0.1.0-dev` runtime/code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`.
+- Runtime-test P3 slice 1 on `0.1.1-dev` exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`.
 - Use a change which differs by exactly one equipped slot and equips/replaces a real item, with no explicit empty-slot change. The user's enchanted and unenchanted copies of the same gloves are a convenient P3 test despite not being a P2 exact-duplicate case: make/use one-slot outfits for the two glove states and switch both directions.
 - Confirm each one-slot switch equips the intended glove without Lua errors, then repeat several times. The existing 1.5-second scheduling behaviour may still be visible and is not a failure of this slice.
 - After the Outfitter-owned swap, make one manual or pfUI character-slot flyout change and confirm Outfitter still treats it as external/manual state rather than immediately fighting it.
@@ -245,7 +249,7 @@ P3 slice 1 is implemented at runtime/code head `5b2f20a93a3e1e743ff6f5a7ae397399
 - **P0 — baseline/workflow:** complete.
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
 - **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
-- **P3 — cursor-free executor:** active. Slice 1 at `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` routes only one exact non-bank equip/replacement through ClassicAPI GUID/explicit-slot swapping and records an owned acknowledgement marker. Await runtime validation before implementing event-driven multi-change sequencing. Explicit unequips and legacy timing constraints remain unchanged.
+- **P3 — cursor-free executor:** active. Slice 1 executor logic at `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`, current testable build `0.1.1-dev` at runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`, routes only one exact non-bank equip/replacement through ClassicAPI GUID/explicit-slot swapping and records an owned acknowledgement marker. Await runtime validation before implementing event-driven multi-change sequencing. Explicit unequips and legacy timing constraints remain unchanged.
 - **P4 — automatic-state modernization:** replace tooltip parsing/broad polling for Riding, auras, forms, Swimming, and similar states only where a verified ClassicAPI fact exists; preserve fallback where needed.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
 - **P6 — optional C_EquipmentSet interoperability:** only after Outfitter's model/executor are stable, decide whether named Outfitter outfits should explicitly import/export/mirror user-visible ClassicAPI sets.
@@ -276,4 +280,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-test P3 slice 1 on exact runtime/code head `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e` using a one-slot glove swap in both directions, repeated several times; then verify one manual/pfUI slot change still becomes external/manual state and one ordinary multi-slot outfit still follows the P2 legacy baseline. Report the results before any further P3 implementation. Do not begin event-driven multi-change sequencing or alter the 1.5-second throttle / 0.25-second retry loop until this slice is user-verified.
+Runtime-test P3 slice 1 on version `0.1.1-dev`, exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`, using a one-slot glove swap in both directions, repeated several times; first confirm the UI now reports `0.1.1-dev` from the TOC. Then verify one manual/pfUI slot change still becomes external/manual state and one ordinary multi-slot outfit still follows the P2 legacy baseline. Report the results before any further P3 implementation. Do not begin event-driven multi-change sequencing or alter the 1.5-second throttle / 0.25-second retry loop until this slice is user-verified.
