@@ -1,4 +1,4 @@
-Outfitter_cVersion = "1.4";
+Outfitter_cVersion = GetAddOnMetadata("Outfitter", "Version");
 
 Outfitter_cTitle = "Outfitter";
 Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;
