@@ -8,13 +8,13 @@
 - Version: `0.1.0-dev`
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `9e7f75634072600ec470fa00e21da84eeeb61526`
+- Current runtime/code head: `dcc3f3572c201a568eb5471ebf52019fb42feefe`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: the first P1 runtime test failed on pre-initialization SavedVariables access. A broader P1 preflight hardening pass is now implemented and Lua 5.0.2-checked. Retest P1 only; do not begin P2 or change physical equipment execution until it passes.
+- Current scope boundary: clean SavedVariables startup and outfit creation now work, but P1 remains blocked by a repeated stale minimap-drag timer error found during rapid outfit switching. The drag-state fix is implemented and Lua 5.0.2-checked. Retest P1 only; do not begin P2 or change physical equipment execution until it passes.
 
 ## Current Design / Development Contract
 
@@ -116,14 +116,23 @@ The first runtime test exposed a legacy first-use lifecycle failure. Runtime/cod
 - First-use initialization still accepts the legacy `PLAYER_ALIVE` trigger, but `BAG_UPDATE` or `UNIT_INVENTORY_CHANGED` may also establish inventory readiness if `PLAYER_ALIVE` is not delivered.
 - Initial startup keeps those two readiness events registered; normal post-initialization zoning retains the legacy suspension behaviour.
 
-A broader preflight hardening pass completed at runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526`:
+A broader preflight hardening pass completed at `9e7f75634072600ec470fa00e21da84eeeb61526`:
 - Normalizes missing `Options`, `LastOutfitStack`, `HideHelm`, `HideCloak`, and per-category outfit tables before migrations/UI/special-outfit code consumes them.
 - Guards slash-command, binding, public outfit lookup, special-outfit lookup, list-item lookup, and add-outfit entry points against pre-initialization nil access.
 - Keeps the minimap button hidden until initialization decides whether it should be shown, eliminating its pre-init drag/click state mutation window.
 - Audited all 98 direct `gOutfitter_Settings` references; remaining unguarded accesses are owned by post-initialization UI/internal paths reached only after the lifecycle gate.
 - No cursor swapping, stack compilation, automatic-outfit semantics, SavedVariables schema, Riding detection, or paperdoll hook behaviour was changed.
 
+Rapid switching then exposed a separate legacy minimap-drag/timer invariant failure. Runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`:
+- Makes minimap drag-start initialize its own cursor/center origin instead of assuming `OnMouseDown` ran first.
+- Uses `OutfitterMinimapButton:GetEffectiveScale()` explicitly rather than relying on the shared update frame's `this`.
+- Clears drag origin state on drag end.
+- Detects and cancels impossible stale drag state before any arithmetic, so the shared equipment update timer cannot repeatedly fault on nil coordinates.
+- Does not alter equipment execution or outfit semantics.
+
 ## Recent Relevant Commits
+- `dcc3f3572c201a568eb5471ebf52019fb42feefe` — fixed stale/incomplete minimap drag state so it cannot repeatedly crash the shared update timer.
+- `0e98276856f64c975e5eb3c9a055e04552d84c57` — recorded clean-start/outfit-creation success and the repeated minimap timer failure.
 - `9e7f75634072600ec470fa00e21da84eeeb61526` — completed P1 preflight hardening by normalizing legacy/partial settings, guarding pre-init public/keybind/slash lookup paths, and hiding the minimap button until initialization.
 - `9b0aad1d72a64485c7479819f8f1e2a58974e7ce` — hardened settings normalization and public entry points.
 - `24e4b557aa722ab46014cf5a7597f52d2104ddba` — fixed first-use initialization readiness and blocked settings-dependent UI/update paths until initialization completes.
@@ -141,8 +150,9 @@ A broader preflight hardening pass completed at runtime/code head `9e7f756340726
 - Required addon-local BLP artwork is present.
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
-- P1 ClassicAPI observation/identity bridge plus the initialization/preflight hardening pass are implemented; current runtime/code head is `9e7f75634072600ec470fa00e21da84eeeb61526`.
-- The hardening pass is statically/compiler checked but has not yet been user-tested.
+- P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented; current runtime/code head is `dcc3f3572c201a568eb5471ebf52019fb42feefe`.
+- Clean SavedVariables startup and creation of two outfits are user-verified on the preceding runtime.
+- The drag-state fix is statically/compiler checked but has not yet been user-tested.
 - No modernization beyond P1 has been implemented.
 
 ## Static / Automated Checks
@@ -155,13 +165,14 @@ A broader preflight hardening pass completed at runtime/code head `9e7f756340726
 - P1 diff review confirmed the runtime delta is limited to `OutfitterClassicAPI.lua`, its TOC entry, and small event registration/callback insertions in `Outfitter.lua`.
 - P1 adds no new top-level locals to the large legacy `Outfitter.lua`; the adapter is separate to avoid worsening Lua 5.0 top-level local pressure.
 - Static review of the initialization call chain and all 98 direct `gOutfitter_Settings` references identified and closed the remaining defensible pre-init/partial-settings hazards without altering outfit semantics.
-- Real Lua 5.0.2 compiler check passed all 8 runtime Lua files after the full preflight hardening pass. The successful check ran on validation commit `300cbf664e764273d2f8c337d3abc58a3bab0cf1`, whose runtime files match runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526`; the temporary workflow was removed afterward at `25728bbcc596aa529ecc7c67bf05f9d88573bc9d`.
+- Real Lua 5.0.2 compiler check passed all 8 runtime Lua files after the full preflight hardening pass.
+- Real Lua 5.0.2 compiler check also passed all 8 runtime Lua files after the drag-state fix. That successful run was on validation commit `1f34cf97f09cc3cb55b6666f320afe57e0e058bf`, whose runtime files match runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`; the temporary workflow was removed afterward at `ea16a761de1c2d857ec63e34ce8d85c2d676f35c`.
 - ClassicAPI adapter capability checks were re-reviewed against brues-code/ClassicAPI's documented `C_EventUtils.IsEventValid` and `PLAYER_EQUIPMENT_CHANGED` support.
 - No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
 - The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults; clean SavedVariables startup now passes that point.
-- Current P1 blocker: stale/incomplete minimap drag state can leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly calls `OutfitterMinimapButton_UpdateDragPosition`, which faults on nil arithmetic and can keep firing.
+- Previous P1 blocker: stale/incomplete minimap drag state could leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly called `OutfitterMinimapButton_UpdateDragPosition`, faulting on nil arithmetic. Fix is implemented at `dcc3f3572c201a568eb5471ebf52019fb42feefe` and awaits runtime retest.
 - The lifecycle/preflight hardening through `9e7f75634072600ec470fa00e21da84eeeb61526` is implemented and compiler-checked but still needs the same user runtime test, especially the first-use/no-SavedVariables and existing/partial-SavedVariables paths.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
@@ -180,16 +191,18 @@ A broader preflight hardening pass completed at runtime/code head `9e7f756340726
 - Not tested/blocked: remaining P1 checklist until the repeated timer error is fixed.
 
 ### Next Runtime Test
-Test exact runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526` (or the documentation-only handoff successor containing the same runtime tree) on WoW 1.12.1 + ClassicAPI/pfUI. Begin with the initialization path before any other interactions:
+Test exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe` (or the documentation-only handoff successor containing the same runtime tree) on WoW 1.12.1 + ClassicAPI/pfUI:
 
 1. Login/reload with no Lua errors; specifically verify none of the previous settings-nil failures recur.
-2. Open Outfitter and verify the imported baseline UI still works. If practical, exercise both one clean first-use start with Outfitter SavedVariables backed up/temporarily absent and one normal start with the existing SavedVariables restored; the hardening pass targets both first-use and partial/older settings structures.
-3. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
-4. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
-5. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
-6. Exercise existing named, partial, and special outfits and verify they still use the unchanged legacy executor.
-7. Verify SavedVariables remain compatible and no unexpected schema mutation occurs.
-8. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
+2. Open Outfitter and confirm the current clean database still shows normal named outfits.
+3. Rapidly switch between the two created outfits and back several times; verify the old line-5002 `CursorStartX` error does not recur and the error does not start firing repeatedly.
+4. If convenient, click/drag the minimap button once and then repeat rapid outfit switching, to exercise the repaired drag lifecycle.
+5. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
+6. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
+7. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
+8. Exercise an existing partial and special outfit and verify they still use the unchanged legacy executor.
+9. `/reload` and confirm the two created outfit names/states persist correctly.
+10. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
@@ -227,4 +240,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Fix the minimap drag-state invariant within P1: drag start must initialize its own cursor/center state, drag updates must use the minimap button's scale and safely cancel invalid stale drag state, then run the real Lua 5.0.2 checker and retest rapid outfit switching. Do not begin P2 or change the physical equipment executor.
+Runtime-test exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`, beginning with repeated rapid switching between the two newly created outfits and one minimap-button drag cycle. Record the result here. Do not begin P2 or change the physical equipment executor until P1 passes.
