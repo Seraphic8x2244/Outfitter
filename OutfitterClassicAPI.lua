@@ -93,6 +93,13 @@ function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 		return false;
 	end
 	
+	-- Vanilla cannot equip directly from bank storage. Leave bank-sourced
+	-- changes on Outfitter's existing bank-aware path.
+	if pItem.BagIndex
+	and (pItem.BagIndex < 0 or pItem.BagIndex > NUM_BAG_SLOTS) then
+		return false;
+	end
+	
 	local vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
 	
 	if not vItemGUID then
