@@ -8,13 +8,13 @@
 - Version: `0.1.0-dev`
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `20879e99be476e03ebcbb7cab6f861a006af1624`
+- Current runtime/code head: `24e4b557aa722ab46014cf5a7597f52d2104ddba`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: P1 runtime validation failed on the first test. Fix only the pre-initialization SavedVariables lifecycle failure, then retest P1. Do not begin P2 or change physical equipment execution.
+- Current scope boundary: the first P1 runtime test failed on pre-initialization SavedVariables access; the lifecycle fix is implemented and Lua 5.0.2-checked. Retest P1 only. Do not begin P2 or change physical equipment execution until it passes.
 
 ## Current Design / Development Contract
 
@@ -102,7 +102,7 @@
 ### Active Implementation Decision: P1
 P1 intentionally changes observation only, not physical swapping.
 
-Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
+P1 observation bridge was implemented at `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - Added `OutfitterClassicAPI.lua` as the ClassicAPI boundary.
 - Added ClassicAPI availability/event-capability checks.
 - Added exact GUID helpers for equipment and bag item locations.
@@ -110,10 +110,17 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - Registered `PLAYER_EQUIPMENT_CHANGED` when available.
 - Routed that event into existing `Outfitter_InventoryChanged2`.
 - Kept legacy `UNIT_INVENTORY_CHANGED` during P1 as fallback/parallel observation.
-- Did not change cursor swapping, stack compilation, automatic outfits, SavedVariables, Riding detection, or paperdoll hooks.
+
+The first runtime test exposed a legacy first-use lifecycle failure. Runtime/code commit `24e4b557aa722ab46014cf5a7597f52d2104ddba` fixes only that P1-blocking initialization path:
+- `Outfitter_Update` and the Outfitter UI toggle no longer enter settings-dependent paths before initialization completes.
+- First-use initialization still accepts the legacy `PLAYER_ALIVE` trigger, but `BAG_UPDATE` or `UNIT_INVENTORY_CHANGED` may also establish inventory readiness if `PLAYER_ALIVE` is not delivered.
+- Initial startup keeps those two readiness events registered; normal post-initialization zoning retains the legacy suspension behaviour.
+- No cursor swapping, stack compilation, automatic-outfit semantics, SavedVariables schema, Riding detection, or paperdoll hook behaviour was changed.
 
 ## Recent Relevant Commits
-- `20879e99be476e03ebcbb7cab6f861a006af1624` — P1 ClassicAPI equipment observation/identity bridge; runtime delta awaiting user test.
+- `24e4b557aa722ab46014cf5a7597f52d2104ddba` — fixed first-use initialization readiness and blocked settings-dependent UI/update paths until initialization completes; awaiting runtime retest.
+- `028f0311ca103744a2141a1fd162715c4099ecf3` — recorded the failed first P1 runtime test and its common pre-initialization settings failure.
+- `20879e99be476e03ebcbb7cab6f861a006af1624` — P1 ClassicAPI equipment observation/identity bridge; first runtime test reached initialization failures before the remaining checklist could be completed.
 - `588f52f401a53061e546a3ef8aaeb860de546bcb` — created the initial live handoff/status document.
 - `c92a11796e8decb4c43b79b205624e32ceb0ee59` — imported the complete Cosmin runtime baseline, required BLP artwork and `Bindings.xml`, development metadata, and initial workflow/design documentation.
 - `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — initial repository scaffold on `main`.
@@ -126,7 +133,8 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - Required addon-local BLP artwork is present.
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
-- P1 ClassicAPI observation/identity bridge is implemented at `20879e99be476e03ebcbb7cab6f861a006af1624`.
+- P1 ClassicAPI observation/identity bridge plus the P1-blocking initialization lifecycle fix are implemented; current runtime/code head is `24e4b557aa722ab46014cf5a7597f52d2104ddba`.
+- The lifecycle fix is statically checked but has not yet been user-tested.
 - No modernization beyond P1 has been implemented.
 
 ## Static / Automated Checks
@@ -138,11 +146,13 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - pfUI's ClassicAPI Equipment Manager and paperdoll flyout module were inspected.
 - P1 diff review confirmed the runtime delta is limited to `OutfitterClassicAPI.lua`, its TOC entry, and small event registration/callback insertions in `Outfitter.lua`.
 - P1 adds no new top-level locals to the large legacy `Outfitter.lua`; the adapter is separate to avoid worsening Lua 5.0 top-level local pressure.
-- No static inspection is being counted as an in-game test.
+- Static review of `24e4b557aa722ab46014cf5a7597f52d2104ddba` confirmed the lifecycle delta is limited to initialization readiness/event suspension plus pre-initialization UI/update guards; no executor, stack, SavedVariables-schema, Riding, or paperdoll-hook changes are present.
+- Real Lua 5.0.2 compiler check passed all 8 runtime Lua files. The successful check ran on validation commit `a3ec262329261a368db10e6ecfd3cf3cfbd217d6`, whose runtime Lua tree is identical to `24e4b557aa722ab46014cf5a7597f52d2104ddba`; the temporary validation workflow was removed afterward and cleanup head `d7e4b8d5c0b012f6aee93e6f543fb2e4eee99087` has no file diff from the runtime commit.
+- No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
-- P1 first runtime test failed: `gOutfitter_Settings` was nil in multiple callable paths before initialization completed.
-- Reported nil-value failures in `Outfitter.lua`: line 1820 (`Outfitter_SortOutfits`), 1921 (`Outfitter_Update` options panel), 2399 (`Outfitter_FindOutfitByName`), and 4071 (`Outfitter_AddOutfit`). All converge on pre-initialization access to `gOutfitter_Settings`/`Outfits` rather than four independent faults.
+- The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults.
+- The lifecycle fix at `24e4b557aa722ab46014cf5a7597f52d2104ddba` is implemented and compiler-checked but still needs the same user runtime test, especially the first-use/no-SavedVariables path.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
 - Legacy equipment updates still use the 1.5-second throttle and 0.25-second OnUpdate retry path.
@@ -160,10 +170,10 @@ Implemented at runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624`:
 - Not tested: remaining P1 checklist after the initialization failure.
 
 ### Next Runtime Test
-After the P1 initialization-lifecycle fix is committed and statically checked, rerun the same WoW 1.12.1 + ClassicAPI/pfUI checklist, beginning with a fresh login/reload and opening Outfitter before any other interactions:
+Test exact runtime/code commit `24e4b557aa722ab46014cf5a7597f52d2104ddba` (or the documentation-only handoff successor containing the same runtime tree) on WoW 1.12.1 + ClassicAPI/pfUI. Begin with the initialization path before any other interactions:
 
-1. Login/reload with no Lua errors.
-2. Open Outfitter and verify the imported baseline UI still works.
+1. Login/reload with no Lua errors; specifically verify none of the previous settings-nil failures recur.
+2. Open Outfitter and verify the imported baseline UI still works. If practical, also exercise one clean first-use start with Outfitter SavedVariables backed up/temporarily absent, because that is the path the fix targets.
 3. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
 4. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
 5. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
@@ -207,4 +217,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Trace and fix the single lifecycle defect that permits pre-initialization access to `gOutfitter_Settings`; keep the patch within P1, run the real VanillaTemplate Lua 5.0.2 checker, then retest the full P1 checklist. Do not begin P2 or change the physical equipment executor.
+Runtime-test exact runtime/code commit `24e4b557aa722ab46014cf5a7597f52d2104ddba` using the checklist above, with first-use initialization as the priority check. Record the result here. Do not begin P2 or change the physical equipment executor until P1 passes.
