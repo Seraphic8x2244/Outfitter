@@ -160,7 +160,8 @@ A broader preflight hardening pass completed at runtime/code head `9e7f756340726
 - No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
-- The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults.
+- The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults; clean SavedVariables startup now passes that point.
+- Current P1 blocker: stale/incomplete minimap drag state can leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly calls `OutfitterMinimapButton_UpdateDragPosition`, which faults on nil arithmetic and can keep firing.
 - The lifecycle/preflight hardening through `9e7f75634072600ec470fa00e21da84eeeb61526` is implemented and compiler-checked but still needs the same user runtime test, especially the first-use/no-SavedVariables and existing/partial-SavedVariables paths.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
@@ -173,10 +174,10 @@ A broader preflight hardening pass completed at runtime/code head `9e7f756340726
 ## Testing
 
 ### Last Runtime Test
-- Version/commit: `0.1.0-dev`, runtime/code commit `20879e99be476e03ebcbb7cab6f861a006af1624` (documentation-only successor handoff `b61bd236f5ff1e1b8ea244022d530ec4d112bc76`).
-- Passed: Not established; testing stopped on repeated Lua errors.
-- Failed: addon lifecycle allows UI/API paths to reach `gOutfitter_Settings` before `Outfitter_Initialize` has created/restored the settings root. User reported nil-value errors at lines 1820, 1921, 2399, and 4071.
-- Not tested: remaining P1 checklist after the initialization failure.
+- Version/commit: `0.1.0-dev`, runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526`.
+- Passed: clean SavedVariables startup now produces a healthy default outfit list; Outfitter opens; user successfully created two outfits.
+- Failed: rapid outfit switching woke the shared update timer while `OutfitterMinimapButton.IsDragging` was true but `CursorStartX` was nil, causing repeated arithmetic errors in `OutfitterMinimapButton_UpdateDragPosition` (reported at current line 5002).
+- Not tested/blocked: remaining P1 checklist until the repeated timer error is fixed.
 
 ### Next Runtime Test
 Test exact runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526` (or the documentation-only handoff successor containing the same runtime tree) on WoW 1.12.1 + ClassicAPI/pfUI. Begin with the initialization path before any other interactions:
@@ -226,4 +227,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-test exact runtime/code head `9e7f75634072600ec470fa00e21da84eeeb61526` using the checklist above, with clean first-use initialization and normal existing-SavedVariables startup as the priority checks. Record the result here. Do not begin P2 or change the physical equipment executor until P1 passes.
+Fix the minimap drag-state invariant within P1: drag start must initialize its own cursor/center state, drag updates must use the minimap button's scale and safely cancel invalid stale drag state, then run the real Lua 5.0.2 checker and retest rapid outfit switching. Do not begin P2 or change the physical equipment executor.
