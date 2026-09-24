@@ -155,7 +155,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented; current runtime/code head is `dcc3f3572c201a568eb5471ebf52019fb42feefe`.
 - Clean SavedVariables startup and creation of two outfits are user-verified on the preceding runtime.
-- The drag-state fix is statically/compiler checked and its rapid-switching failure case is user-verified fixed. A direct minimap-button drag cycle is still untested.
+- The drag-state fix is statically/compiler checked and its rapid-switching failure case is user-verified fixed. Native Outfitter minimap-button dragging is not directly testable in the user's current setup because pfUI manages addon-button dragging; attempted click/drag interaction produced no Lua error.
 - No modernization beyond P1 has been implemented.
 
 ## Static / Automated Checks
@@ -175,7 +175,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 
 ## Current Issues
 - The first P1 runtime test failed because `gOutfitter_Settings` was nil in multiple callable paths before initialization completed. The reported failures at old lines 1820, 1921, 2399, and 4071 all converged on that lifecycle defect rather than four independent faults; clean SavedVariables startup now passes that point.
-- Previous P1 blocker: stale/incomplete minimap drag state could leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly called `OutfitterMinimapButton_UpdateDragPosition`, faulting on nil arithmetic. The rapid outfit-switching reproduction now passes on `dcc3f3572c201a568eb5471ebf52019fb42feefe`; only a direct minimap-drag lifecycle check remains.
+- Previous P1 blocker: stale/incomplete minimap drag state could leave `OutfitterMinimapButton.IsDragging` true without initialized cursor/center start coordinates. The shared `OutfitterUpdateFrame` then repeatedly called `OutfitterMinimapButton_UpdateDragPosition`, faulting on nil arithmetic. The rapid outfit-switching reproduction now passes on `dcc3f3572c201a568eb5471ebf52019fb42feefe`; pfUI owns addon-button dragging in the user's setup, so the native drag lifecycle cannot be isolated there, but attempted click/drag interaction was error-free.
 - The lifecycle/preflight hardening through `9e7f75634072600ec470fa00e21da84eeeb61526` is implemented and compiler-checked but still needs the same user runtime test, especially the first-use/no-SavedVariables and existing/partial-SavedVariables paths.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
 - Physical equipment execution remains cursor-driven.
@@ -192,18 +192,18 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 - Passed: repeated rapid switching between the two created outfits and back; no Lua errors; prior repeated `CursorStartX` timer failure did not recur.
 - Previously established in the same P1 cycle: clean SavedVariables startup, healthy named default outfit list, Outfitter opens, and two outfits can be created.
 - Failed: None in this retest.
-- Not tested: direct minimap-button drag cycle, manual slot changes, pfUI-driven changes, external/manual temporary-state ownership, partial/special outfits, reload persistence, and duplicate-event/reconciliation symptoms.
+- Environment-limited: native Outfitter minimap-button drag cycle cannot be isolated because pfUI manages addon-button dragging; attempted click/drag interaction produced no Lua errors.
+- Not tested: manual slot changes, pfUI-driven changes, external/manual temporary-state ownership, partial/special outfits, reload persistence, and duplicate-event/reconciliation symptoms.
 
 ### Next Runtime Test
 Continue on exact runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`:
 
-1. Click/drag the Outfitter minimap button once, release it, then rapidly switch outfits again; verify no drag/timer error.
-2. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
-3. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
-4. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
-5. Exercise an existing partial and special outfit and verify they still use the unchanged legacy executor.
-6. `/reload` and confirm the two created outfit names/states persist correctly.
-7. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
+1. Manually equip and unequip several equipment slots; verify Outfitter reconciles the changes.
+2. Repeat manual slot changes through pfUI's Equipment Manager/flyouts.
+3. Verify externally initiated gear changes are accepted as manual/temporary state rather than immediately reasserted by Outfitter.
+4. Exercise an existing partial and special outfit and verify they still use the unchanged legacy executor.
+5. `/reload` and confirm the two created outfit names/states persist correctly.
+6. Report any duplicate-event/reconciliation symptoms caused by keeping both `UNIT_INVENTORY_CHANGED` and `PLAYER_EQUIPMENT_CHANGED` during P1.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
@@ -241,4 +241,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Continue the remaining P1 runtime checklist on `dcc3f3572c201a568eb5471ebf52019fb42feefe`: first do one minimap-button drag/release followed by rapid outfit switching, then manual/pfUI slot changes, partial/special outfits, and reload persistence. Do not begin P2 or change the physical equipment executor until P1 passes.
+Continue the remaining P1 runtime checklist on `dcc3f3572c201a568eb5471ebf52019fb42feefe`: manual/pfUI slot changes, external/manual temporary-state ownership, partial/special outfits, and reload persistence. Treat native minimap dragging as environment-limited under pfUI rather than a blocker. Do not begin P2 or change the physical equipment executor until P1 passes.
