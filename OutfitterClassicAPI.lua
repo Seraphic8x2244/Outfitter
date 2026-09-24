@@ -7,6 +7,7 @@
 OutfitterClassicAPI = {};
 
 local gOutfitterClassicAPI_RuntimeItemGUIDs = setmetatable({}, {__mode = "k"});
+local gOutfitterClassicAPI_OwnedEquipmentChange = nil;
 
 function OutfitterClassicAPI.SetRuntimeItemGUID(pItem, pItemGUID)
 	if not pItem then
@@ -78,4 +79,50 @@ function OutfitterClassicAPI.GetItemLocation(pItemGUID)
 	end
 
 	return C_Item.GetItemLocation(pItemGUID);
+end
+
+function OutfitterClassicAPI.CanEquipItemToSlot()
+	return OutfitterClassicAPI.IsAvailable()
+	and type(C_Item.EquipItemByName) == "function";
+end
+
+function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
+	if not pItem
+	or not pSlotID
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	local vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if not vItemGUID then
+		return false;
+	end
+	
+	-- P3 starts with one exact, explicit-slot swap at a time. Keep an
+	-- Outfitter-owned marker for the matching PLAYER_EQUIPMENT_CHANGED
+	-- acknowledgement; multi-change sequencing will build on this boundary
+	-- after the single-change path is runtime-proven.
+	gOutfitterClassicAPI_OwnedEquipmentChange =
+	{
+		SlotID = pSlotID,
+		ItemGUID = vItemGUID,
+	};
+	
+	C_Item.EquipItemByName(vItemGUID, pSlotID);
+	return true;
+end
+
+function OutfitterClassicAPI.ObservePlayerEquipmentChanged(pSlotID)
+	local vEquipmentChange = gOutfitterClassicAPI_OwnedEquipmentChange;
+	
+	if not vEquipmentChange
+	or not pSlotID
+	or vEquipmentChange.SlotID ~= pSlotID then
+		return nil;
+	end
+	
+	gOutfitterClassicAPI_OwnedEquipmentChange = nil;
+	
+	return OutfitterClassicAPI.GetInventoryItemGUID(pSlotID) == vEquipmentChange.ItemGUID;
 end
