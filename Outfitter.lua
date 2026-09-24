@@ -581,6 +581,10 @@ StaticPopupDialogs["OUTFITTER_CONFIRM_REBUILD"] =
 };
 
 function Outfitter_ToggleOutfitterFrame()
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	if Outfitter_IsOpen() then
 		OutfitterFrame:Hide();
 	else
@@ -680,12 +684,22 @@ function Outfitter_OnHide()
 end
 
 function Outfitter_OnEvent(pEvent)
-	-- Ignore all events except for entering world until initialization is
-	-- completed
+	-- Ignore normal events until initialization is completed.  On first use the
+	-- legacy code waits for PLAYER_ALIVE so the bags and inventory are ready.
+	-- Some 1.12 clients do not reliably deliver that event during login, so an
+	-- actual bag/equipment update is also accepted as a readiness signal.
 	
 	if not gOutfitter_Initialized
 	and pEvent ~= "VARIABLES_LOADED" then
-		if pEvent ~= Outfitter_cInitializationEvent then
+		local	vIsInitializationEvent = pEvent == Outfitter_cInitializationEvent;
+		
+		if not vIsInitializationEvent
+		and Outfitter_cInitializationEvent == "PLAYER_ALIVE" then
+			vIsInitializationEvent = pEvent == "BAG_UPDATE"
+			                    or pEvent == "UNIT_INVENTORY_CHANGED";
+		end
+		
+		if not vIsInitializationEvent then
 			return;
 		end
 		
@@ -700,12 +714,17 @@ end
 
 function Outfitter_PlayerLeavingWorld()
 	-- To improve load screen performance, suspend events which are
-	-- fired repeatedly and rapidly during zoning
+	-- fired repeatedly and rapidly during zoning.  During initial startup keep
+	-- the bag/equipment signals registered so first-use initialization has a
+	-- readiness fallback if PLAYER_ALIVE is not delivered.
 	
 	gOutfitter_Suspended = true;
 	
-	Outfitter_SuspendEvent(OutfitterFrame, "BAG_UPDATE");
-	Outfitter_SuspendEvent(OutfitterFrame, "UNIT_INVENTORY_CHANGED");
+	if gOutfitter_Initialized then
+		Outfitter_SuspendEvent(OutfitterFrame, "BAG_UPDATE");
+		Outfitter_SuspendEvent(OutfitterFrame, "UNIT_INVENTORY_CHANGED");
+	end
+	
 	Outfitter_SuspendEvent(OutfitterFrame, "UPDATE_INVENTORY_ALERTS");
 	Outfitter_SuspendEvent(OutfitterFrame, "SPELLS_CHANGED");
 	Outfitter_SuspendEvent(OutfitterFrame, "PLAYER_AURAS_CHANGED");
@@ -1827,6 +1846,10 @@ function Outfiter_CompareOutfitNames(pOutfit1, pOutfit2)
 end
 
 function Outfitter_Update(pUpdateSlotEnables)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	if not OutfitterFrame:IsVisible() then
 		return;
 	end
