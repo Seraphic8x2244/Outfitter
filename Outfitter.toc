@@ -1,7 +1,7 @@
 ## Interface: 11200
 ## Title: Outfitter-dev
 ## Notes: Outfitter
-## Version: 0.1.0-dev
+## Version: 0.1.1-dev
 ## OptionalDeps: TankPoints
 ## RequiredDeps:
 ## SavedVariablesPerCharacter: gOutfitter_Settings
