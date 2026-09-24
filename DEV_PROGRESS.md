@@ -14,7 +14,7 @@
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: P1 is user-verified passed on WoW 1.12.1 with ClassicAPI/pfUI after a clean SavedVariables reset. P2 runtime item-identity modernization is implemented, compiler-checked, and partially user-verified in-game on its exact code head. Normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema have passed. Bank-open matching plus focused partial/special-outfit confirmation remain; the true same-legacy-identity duplicate-instance case may remain explicitly untested if no suitable duplicate is available. Do not begin P3 until the P2 runtime gate is complete.
+- Current scope boundary: P1 and P2 are user-accepted on WoW 1.12.1 with ClassicAPI/pfUI. P2 exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd` passed normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema. The user explicitly accepted P2 as solid enough to proceed. Remaining bank-open, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case are recorded validation debt, not inferred passes. P3 may now begin; keep it narrowly scoped to replacing Outfitter-controlled cursor execution with ClassicAPI exact-item/explicit-slot swapping and transaction ownership.
 
 ## Current Design / Development Contract
 
@@ -168,7 +168,7 @@ P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
 - `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 0.1.0-dev`.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented and user-verified.
-- P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is partially user-verified in-game: normal/rapid outfit switching, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema passed. Bank-open matching and focused partial/special-outfit confirmation remain; a true exact-duplicate legacy-identity case is optional and may remain explicitly untested.
+- P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is user-accepted after successful normal/rapid outfit switching, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema. Bank-open matching, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case remain explicit validation debt.
 
 ## Static / Automated Checks
 - Imported runtime Lua/XML/localization files were verified content-identical to Cosmin's inspected head blobs; project metadata/docs are the intentional differences.
@@ -189,7 +189,7 @@ P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb
 
 ## Current Issues
 - P1 is currently passing in-game after a clean SavedVariables reset.
-- P2's new runtime GUID identity/matching delta is compiler-checked and partially user-tested in-game. Normal/rapid switching, manual changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema pass; bank-open matching and focused partial/special-outfit confirmation remain. Do not treat P2 as complete or start P3 yet.
+- P2's runtime GUID identity/matching delta is compiler-checked and user-accepted. Normal/rapid switching, manual changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case remain documented validation debt; P3 is now unblocked.
 - The original pre-existing Outfitter SavedVariables produced malformed/blank outfit names and odd disabled states. Deleting those SavedVariables fixed the problem; the old file is no longer available, so migration compatibility with that unknown prior schema cannot be diagnosed or claimed.
 - The earlier pre-initialization settings nil failures and repeated minimap-drag timer failure are fixed and user-verified not to recur in the tested setup.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
@@ -212,16 +212,14 @@ P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb
 - Inherited P1 environment limitation: native Outfitter minimap-button drag lifecycle cannot be isolated because pfUI manages addon-button dragging; attempted interaction had produced no Lua errors.
 
 ### Next Runtime Test
-- P1 runtime gate is complete. P2 is partially passed on exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd`.
-- Re-confirm one Partial outfit and one Special/automatic outfit still behave normally on P2.
-- Exercise bank-open matching once; P2 must fall back cleanly anywhere ClassicAPI cannot provide a live GUID.
-- If a true duplicate becomes available, use two physical copies with identical legacy identity fields (same item, same `SubCode`, same `EnchantCode`) and confirm Outfitter follows the intended physical instance after one copy moves during the same session. The currently available enchanted/unenchanted glove pair does not satisfy this case; if no true duplicate is convenient, record the case as untested rather than blocking P2.
-- Do not begin P3 until these remaining P2 gate results are reported and P2 is explicitly accepted.
+- P1 and P2 are accepted. Preserve the unresolved P2 cases as validation debt rather than retroactively treating them as passed.
+- The next runtime test will be defined by the first P3 executor slice after implementation. It must compare Outfitter-owned swaps against the P2 known-good baseline while preserving manual/pfUI external-change handling.
+- Opportunistically, bank-open matching, one Partial outfit, one Special/automatic outfit, and a true same-legacy-identity duplicate-instance case may still be exercised later; failures there should reopen the relevant P2 assumption rather than being hidden by P3.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
-- **P2 — item identity modernization:** implemented and compiler-checked at `2143a0cd29cc50a8e52d45040adacb299bf133cd`; partially user-verified. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching and focused partial/special confirmation remain; true exact-duplicate physical-instance testing is optional if no suitable duplicate is available.
+- **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
 - **P3 — cursor-free executor:** replace Outfitter-controlled cursor swaps with ClassicAPI exact-item/explicit-slot swapping; introduce Outfitter transaction ownership; remove legacy timing constraints only after runtime evidence proves the replacement boundary.
 - **P4 — automatic-state modernization:** replace tooltip parsing/broad polling for Riding, auras, forms, Swimming, and similar states only where a verified ClassicAPI fact exists; preserve fallback where needed.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
@@ -253,4 +251,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Finish the remaining P2 runtime gate on exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd`: re-confirm one Partial outfit and one Special/automatic outfit, then exercise bank-open matching once. A true same-legacy-identity duplicate-instance test is desirable but non-blocking if no suitable duplicate is available; the enchanted/unenchanted glove pair is not that case because `EnchantCode` distinguishes it. Record the results and explicitly accept P2 before planning or implementing P3; do not change the physical executor, throttle, Riding/special-outfit semantics, or paperdoll hook during this gate.
+Begin P3 narrowly. First inspect the current cursor-driven Outfitter execution path and the available ClassicAPI exact-item/explicit-slot swap primitives, then design the smallest Outfitter-owned execution adapter/transaction boundary that can replace one execution slice without changing stack compilation, manual/pfUI external-change semantics, Riding/special-outfit semantics, paperdoll integration, or unrelated UI. Do not remove the legacy 1.5-second throttle or 0.25-second retry loop until focused runtime evidence shows the new completion boundary is sufficient.
