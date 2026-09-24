@@ -1297,7 +1297,7 @@
 			</OnShow>
 		</Scripts>
 	</Frame>
-	<Button name="OutfitterMinimapButton" hidden="false" enableMouse="true" movable="true" parent="Minimap" toplevel="true">
+	<Button name="OutfitterMinimapButton" hidden="true" enableMouse="true" movable="true" parent="Minimap" toplevel="true">
 		<Size>
 			<AbsDimension x="32" y="32"/>
 		</Size>
