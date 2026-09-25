@@ -512,6 +512,7 @@ local gOutfitter_IsFeigning = false;
 
 local gOutfitter_EquippedNeedsUpdate = false;
 local gOutfitter_WeaponsNeedUpdate = false;
+local gOutfitter_InventoryReconcilePending = false;
 local gOutfitter_LastEquipmentUpdateTime = 0;
 local Outfitter_cMinEquipmentUpdateInterval = 1.5;
 
@@ -960,7 +961,12 @@ function Outfitter_InventoryChanged(pEvent)
 		return;
 	end
 	
-	Outfitter_InventoryChanged2();
+	-- Vanilla can emit this repeatedly during one multi-slot equipment change.
+	-- Collapse those synchronous notifications and reconcile once on the next
+	-- frame instead of rebuilding the complete equipment/bag view for every
+	-- individual event.
+	gOutfitter_InventoryReconcilePending = true;
+	OutfitterTimer_AdjustTimer();
 end
 
 function Outfitter_PlayerEquipmentChanged()
@@ -5079,7 +5085,8 @@ function OutfitterTimer_AdjustTimer()
 	end
 	
 	if gOutfitter_EquippedNeedsUpdate
-	or gOutfitter_WeaponsNeedUpdate then
+	or gOutfitter_WeaponsNeedUpdate
+	or gOutfitter_InventoryReconcilePending then
 		vNeedTimer = true;
 	end
 	
@@ -5094,6 +5101,11 @@ end
 function OutfitterUpdateFrame_OnUpdate(pElapsed)
 	if OutfitterMinimapButton.IsDragging then
 		OutfitterMinimapButton_UpdateDragPosition();
+	end
+	
+	if gOutfitter_InventoryReconcilePending then
+		gOutfitter_InventoryReconcilePending = false;
+		Outfitter_InventoryChanged2();
 	end
 	
 	if not OutfitterUpdateFrame.Elapsed then
