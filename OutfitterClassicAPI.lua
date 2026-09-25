@@ -187,6 +187,14 @@ function OutfitterClassicAPI.SwapEquippedItems(pItem1, pTargetSlotID1, pItem2, p
 		return false;
 	end
 	
+	if not OutfitterClassicAPI_BeginPendingEquipmentChanges(
+	{
+		{SlotID = pTargetSlotID1, ItemGUID = vItemGUID1},
+		{SlotID = pTargetSlotID2, ItemGUID = vItemGUID2},
+	}) then
+		return false;
+	end
+	
 	C_Item.EquipItemByName(vItemGUID1, pTargetSlotID1);
 	return true;
 end
