@@ -2968,11 +2968,10 @@ function Outfitter_OptimizeEquipmentChangeList(pEquipmentChangeList)
 end
 
 function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlots, pExpectedEquippableItems)
-	-- P3 slice 1: a single exact equip/replacement can use ClassicAPI's
-	-- cursor-free explicit-slot swap safely. Keep multi-change outfits on the
-	-- legacy loop until Outfitter owns sequencing across server acknowledgements;
-	-- issuing several direct swaps against stale client locations is not safe.
-	if table.getn(pEquipmentChangeList) == 1 then
+	local vNumChanges = table.getn(pEquipmentChangeList);
+	
+	-- P3 slice 1: preserve the user-verified single exact replacement path.
+	if vNumChanges == 1 then
 		local vEquipmentChange = pEquipmentChangeList[1];
 		
 		if vEquipmentChange.ItemLocation
@@ -2981,6 +2980,39 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 		and OutfitterClassicAPI.EquipItemToSlot(vEquipmentChange.ItemLocation, vEquipmentChange.SlotID) then
 			if pExpectedEquippableItems then
 				OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
+			end
+			
+			return;
+		end
+	
+	-- P3 slice 2: sequence only exact replacements whose source items are all
+	-- in normal bags. The adapter validates every change before issuing the
+	-- first swap, so any empty slot, bank item, equipped source or missing GUID
+	-- leaves the entire list on the unchanged legacy executor below.
+	elseif vNumChanges > 1
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.BeginEquipmentChangeSequence then
+		local vSequenceChanges = {};
+		
+		for _, vEquipmentChange in pEquipmentChangeList do
+			if not vEquipmentChange.ItemLocation then
+				vSequenceChanges = nil;
+				break;
+			end
+			
+			table.insert(vSequenceChanges,
+			{
+				Item = vEquipmentChange.ItemLocation,
+				SlotID = vEquipmentChange.SlotID,
+			});
+		end
+		
+		if vSequenceChanges
+		and OutfitterClassicAPI.BeginEquipmentChangeSequence(vSequenceChanges) then
+			if pExpectedEquippableItems then
+				for _, vEquipmentChange in pEquipmentChangeList do
+					OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
+				end
 			end
 			
 			return;
