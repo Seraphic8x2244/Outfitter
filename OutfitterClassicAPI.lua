@@ -8,7 +8,6 @@ OutfitterClassicAPI = {};
 
 local gOutfitterClassicAPI_RuntimeItemGUIDs = setmetatable({}, {__mode = "k"});
 local gOutfitterClassicAPI_OwnedEquipmentChange = nil;
-local gOutfitterClassicAPI_EquipmentChangeSequence = nil;
 
 function OutfitterClassicAPI.SetRuntimeItemGUID(pItem, pItemGUID)
 	if not pItem then
@@ -100,8 +99,7 @@ end
 function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 	if not pItem
 	or not pSlotID
-	or not OutfitterClassicAPI.CanEquipItemToSlot()
-	or gOutfitterClassicAPI_EquipmentChangeSequence then
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
 		return false;
 	end
 	
@@ -122,26 +120,29 @@ function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 	return true;
 end
 
-function OutfitterClassicAPI.BeginEquipmentChangeSequence(pChanges)
+function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 	if not pChanges
 	or table.getn(pChanges) < 2
 	or not OutfitterClassicAPI.CanEquipItemToSlot()
-	or gOutfitterClassicAPI_OwnedEquipmentChange
-	or gOutfitterClassicAPI_EquipmentChangeSequence then
+	or gOutfitterClassicAPI_OwnedEquipmentChange then
 		return false;
 	end
 	
-	local vSequenceChanges = {};
+	local vValidatedChanges = {};
+	local vUsedSources = {};
+	local vUsedSlots = {};
 	
+	-- Validate the complete burst before sending anything. This direct path is
+	-- deliberately limited to exact items which are still in distinct normal
+	-- bag slots. If any source has moved or become ambiguous, execute nothing
+	-- here and let Outfitter fall back to its legacy executor.
 	for _, vChange in pChanges do
 		local vItem = vChange.Item;
 		
-		-- Slice 2 deliberately sequences only normal-bag sources. Equipped
-		-- sources can move as an earlier swap completes, and bank/empty-slot
-		-- changes retain the proven legacy executor.
 		if not vItem
 		or not vChange.SlotID
 		or vItem.BagIndex == nil
+		or not vItem.BagSlotIndex
 		or vItem.BagIndex < 0
 		or vItem.BagIndex > NUM_BAG_SLOTS then
 			return false;
@@ -149,25 +150,35 @@ function OutfitterClassicAPI.BeginEquipmentChangeSequence(pChanges)
 		
 		local vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(vItem);
 		
-		if not vItemGUID then
+		if not vItemGUID
+		or OutfitterClassicAPI.GetBagItemGUID(vItem.BagIndex, vItem.BagSlotIndex) ~= vItemGUID then
 			return false;
 		end
 		
-		table.insert(vSequenceChanges,
+		local vSourceKey = tostring(vItem.BagIndex)..":"..tostring(vItem.BagSlotIndex);
+		
+		if vUsedSources[vSourceKey]
+		or vUsedSlots[vChange.SlotID] then
+			return false;
+		end
+		
+		vUsedSources[vSourceKey] = true;
+		vUsedSlots[vChange.SlotID] = true;
+		
+		table.insert(vValidatedChanges,
 		{
 			SlotID = vChange.SlotID,
 			ItemGUID = vItemGUID,
 		});
 	end
 	
-	gOutfitterClassicAPI_EquipmentChangeSequence =
-	{
-		Changes = vSequenceChanges,
-		Index = 1,
-	};
+	-- All sources are independent bag slots, so these atomic bag->paperdoll
+	-- swaps can be issued back-to-back. No later operation needs to re-resolve
+	-- a source changed by an earlier swap.
+	for _, vChange in vValidatedChanges do
+		C_Item.EquipItemByName(vChange.ItemGUID, vChange.SlotID);
+	end
 	
-	local vFirstChange = vSequenceChanges[1];
-	OutfitterClassicAPI_StartOwnedEquipmentChange(vFirstChange.ItemGUID, vFirstChange.SlotID);
 	return true;
 end
 
@@ -182,27 +193,6 @@ function OutfitterClassicAPI.ObservePlayerEquipmentChanged(pSlotID)
 	
 	local vMatched = OutfitterClassicAPI.GetInventoryItemGUID(pSlotID) == vEquipmentChange.ItemGUID;
 	gOutfitterClassicAPI_OwnedEquipmentChange = nil;
-	
-	local vSequence = gOutfitterClassicAPI_EquipmentChangeSequence;
-	
-	if vSequence then
-		if not vMatched then
-			-- Do not guess after an owned swap failed to land as requested.
-			-- Reconciliation still runs in Outfitter.lua and the remaining
-			-- desired state can be handled by the normal update path.
-			gOutfitterClassicAPI_EquipmentChangeSequence = nil;
-		else
-			vSequence.Index = vSequence.Index + 1;
-			
-			local vNextChange = vSequence.Changes[vSequence.Index];
-			
-			if vNextChange then
-				OutfitterClassicAPI_StartOwnedEquipmentChange(vNextChange.ItemGUID, vNextChange.SlotID);
-			else
-				gOutfitterClassicAPI_EquipmentChangeSequence = nil;
-			end
-		end
-	end
 	
 	return vMatched;
 end

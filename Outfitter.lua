@@ -2985,13 +2985,13 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 			return;
 		end
 	
-	-- P3 slice 2: sequence only exact replacements whose source items are all
-	-- in normal bags. The adapter validates every change before issuing the
-	-- first swap, so any empty slot, bank item, equipped source or missing GUID
-	-- leaves the entire list on the unchanged legacy executor below.
+	-- P3 slice 2/2.0.9: burst only exact replacements whose source items are
+	-- all still in normal bags. The adapter validates the complete list before
+	-- issuing anything; any empty slot, bank item, equipped source, moved
+	-- source or missing GUID leaves the entire list on the legacy executor.
 	elseif vNumChanges > 1
 	and OutfitterClassicAPI
-	and OutfitterClassicAPI.BeginEquipmentChangeSequence then
+	and OutfitterClassicAPI.EquipItemsToSlots then
 		local vSequenceChanges = {};
 		
 		for _, vEquipmentChange in pEquipmentChangeList do
@@ -3008,7 +3008,7 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 		end
 		
 		if vSequenceChanges
-		and OutfitterClassicAPI.BeginEquipmentChangeSequence(vSequenceChanges) then
+		and OutfitterClassicAPI.EquipItemsToSlots(vSequenceChanges) then
 			if pExpectedEquippableItems then
 				for _, vEquipmentChange in pEquipmentChangeList do
 					OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
