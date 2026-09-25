@@ -943,16 +943,17 @@ function Outfitter_InventoryChanged(pEvent)
 end
 
 function Outfitter_PlayerEquipmentChanged()
-	-- ClassicAPI has already narrowed this to a real paperdoll GUID change.
-	-- Let the adapter resolve any Outfitter-owned P3 transaction marker first,
-	-- then reuse the existing reconciliation owner so external/manual swaps
-	-- retain the legacy temporary-outfit behaviour.
+	-- ClassicAPI fires this once per changed paperdoll slot. Use that precision
+	-- only to resolve Outfitter-owned direct-swap markers. Do not run the full
+	-- legacy inventory reconciliation here as well: Vanilla's existing
+	-- UNIT_INVENTORY_CHANGED event remains the single reconciliation owner.
+	-- This avoids rescanning the entire equipment/bag state once per changed
+	-- slot during large outfit changes while preserving manual/external changes
+	-- through the legacy event path.
 	if OutfitterClassicAPI
 	and OutfitterClassicAPI.ObservePlayerEquipmentChanged then
 		OutfitterClassicAPI.ObservePlayerEquipmentChanged(arg1);
 	end
-	
-	Outfitter_InventoryChanged2();
 end
 
 function Outfitter_InventoryChanged2()
