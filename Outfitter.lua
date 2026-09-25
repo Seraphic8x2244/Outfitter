@@ -3009,6 +3009,38 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 		
 		return;
 	
+	-- P3 slice 4/2.0.11: legacy optimization inserts an explicit empty
+	-- before a one-way ring/trinket rotation. For the exact three-change form
+	-- [empty target, equipped source -> target, bag replacement -> source],
+	-- ClassicAPI can complete the final state with two independent atomic swaps.
+	elseif vNumChanges == 3
+	and not pEquipmentChangeList[1].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation.SlotName
+	and pEquipmentChangeList[3].ItemLocation
+	and pEquipmentChangeList[3].ItemLocation.BagIndex ~= nil
+	and pEquipmentChangeList[1].SlotName == pEquipmentChangeList[2].SlotName
+	and pEquipmentChangeList[3].SlotName == pEquipmentChangeList[2].ItemLocation.SlotName
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.RotatePairedAccessoryWithBagItem
+	and OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(
+		pEquipmentChangeList[2].ItemLocation,
+		pEquipmentChangeList[2].SlotID,
+		pEquipmentChangeList[3].ItemLocation,
+		pEquipmentChangeList[3].SlotID) then
+		if pExpectedEquippableItems then
+			OutfitterItemList_SwapLocationWithInventorySlot(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[2].ItemLocation,
+				pEquipmentChangeList[2].SlotName);
+			OutfitterItemList_SwapLocationWithInventorySlot(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[3].ItemLocation,
+				pEquipmentChangeList[3].SlotName);
+		end
+		
+		return;
+	
 	-- P3 slice 2/2.0.9: burst only exact replacements whose source items are
 	-- all still in normal bags. The adapter validates the complete list before
 	-- issuing anything; any empty slot, bank item, equipped source, moved

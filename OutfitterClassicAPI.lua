@@ -156,6 +156,56 @@ function OutfitterClassicAPI.SwapEquippedItems(pItem1, pTargetSlotID1, pItem2, p
 	return true;
 end
 
+function OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(pEquippedItem, pTargetSlotID, pBagItem, pBagTargetSlotID)
+	if not pEquippedItem
+	or not pTargetSlotID
+	or not pBagItem
+	or not pBagTargetSlotID
+	or not pEquippedItem.SlotName
+	or pBagItem.BagIndex == nil
+	or not pBagItem.BagSlotIndex
+	or pBagItem.BagIndex < 0
+	or pBagItem.BagIndex > NUM_BAG_SLOTS
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	local vSourceSlotID = GetInventorySlotInfo(pEquippedItem.SlotName);
+	local vFinger0SlotID = GetInventorySlotInfo("Finger0Slot");
+	local vFinger1SlotID = GetInventorySlotInfo("Finger1Slot");
+	local vTrinket0SlotID = GetInventorySlotInfo("Trinket0Slot");
+	local vTrinket1SlotID = GetInventorySlotInfo("Trinket1Slot");
+	local vIsSupportedPair =
+		(vSourceSlotID == vFinger0SlotID and pTargetSlotID == vFinger1SlotID)
+		or (vSourceSlotID == vFinger1SlotID and pTargetSlotID == vFinger0SlotID)
+		or (vSourceSlotID == vTrinket0SlotID and pTargetSlotID == vTrinket1SlotID)
+		or (vSourceSlotID == vTrinket1SlotID and pTargetSlotID == vTrinket0SlotID);
+	
+	-- The bag replacement must fill the equipped item's original slot. That
+	-- makes the two direct operations independent: the paperdoll move cannot
+	-- relocate the later bag source, and the bag swap then parks the displaced
+	-- unwanted accessory in the bag slot it vacates.
+	if not vIsSupportedPair
+	or pBagTargetSlotID ~= vSourceSlotID then
+		return false;
+	end
+	
+	local vEquippedGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pEquippedItem);
+	local vBagGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pBagItem);
+	
+	if not vEquippedGUID
+	or not vBagGUID
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID) ~= vEquippedGUID
+	or OutfitterClassicAPI.GetBagItemGUID(pBagItem.BagIndex, pBagItem.BagSlotIndex) ~= vBagGUID then
+		return false;
+	end
+	
+	C_Item.EquipItemByName(vEquippedGUID, pTargetSlotID);
+	C_Item.EquipItemByName(vBagGUID, pBagTargetSlotID);
+	return true;
+end
+
+
 
 function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 	if not pChanges
