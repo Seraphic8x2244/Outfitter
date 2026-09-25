@@ -7,7 +7,8 @@
 OutfitterClassicAPI = {};
 
 local gOutfitterClassicAPI_RuntimeItemGUIDs = setmetatable({}, {__mode = "k"});
-local gOutfitterClassicAPI_OwnedEquipmentChange = nil;
+local gOutfitterClassicAPI_PendingEquipmentChanges = nil;
+local gOutfitterClassicAPI_NumPendingEquipmentChanges = 0;
 
 function OutfitterClassicAPI.SetRuntimeItemGUID(pItem, pItemGUID)
 	if not pItem then
@@ -86,20 +87,46 @@ function OutfitterClassicAPI.CanEquipItemToSlot()
 	and type(C_Item.EquipItemByName) == "function";
 end
 
-local function OutfitterClassicAPI_StartOwnedEquipmentChange(pItemGUID, pSlotID)
-	gOutfitterClassicAPI_OwnedEquipmentChange =
-	{
-		SlotID = pSlotID,
-		ItemGUID = pItemGUID,
-	};
+local function OutfitterClassicAPI_BeginPendingEquipmentChanges(pChanges)
+	if gOutfitterClassicAPI_PendingEquipmentChanges
+	or not pChanges
+	or table.getn(pChanges) == 0 then
+		return false;
+	end
 	
-	C_Item.EquipItemByName(pItemGUID, pSlotID);
+	local vPendingChanges = {};
+	local vNumPendingChanges = 0;
+	
+	for _, vChange in pChanges do
+		if not vChange.SlotID
+		or not vChange.ItemGUID
+		or vPendingChanges[vChange.SlotID] then
+			return false;
+		end
+		
+		vPendingChanges[vChange.SlotID] = vChange.ItemGUID;
+		vNumPendingChanges = vNumPendingChanges + 1;
+	end
+	
+	gOutfitterClassicAPI_PendingEquipmentChanges = vPendingChanges;
+	gOutfitterClassicAPI_NumPendingEquipmentChanges = vNumPendingChanges;
+	return true;
+end
+
+function OutfitterClassicAPI.HasPendingEquipmentChanges()
+	return gOutfitterClassicAPI_PendingEquipmentChanges ~= nil;
+end
+
+function OutfitterClassicAPI.ClearPendingEquipmentChanges()
+	gOutfitterClassicAPI_PendingEquipmentChanges = nil;
+	gOutfitterClassicAPI_NumPendingEquipmentChanges = 0;
 end
 
 function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 	if not pItem
 	or not pSlotID
-	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+	or not OutfitterClassicAPI.CanEquipItemToSlot()
+	or OutfitterClassicAPI.HasPendingEquipmentChanges() then
 		return false;
 	end
 	
@@ -116,7 +143,14 @@ function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 		return false;
 	end
 	
-	OutfitterClassicAPI_StartOwnedEquipmentChange(vItemGUID, pSlotID);
+	if not OutfitterClassicAPI_BeginPendingEquipmentChanges(
+	{
+		{SlotID = pSlotID, ItemGUID = vItemGUID},
+	}) then
+		return false;
+	end
+	
+	C_Item.EquipItemByName(vItemGUID, pSlotID);
 	return true;
 end
 
@@ -127,7 +161,8 @@ function OutfitterClassicAPI.SwapEquippedItems(pItem1, pTargetSlotID1, pItem2, p
 	or not pTargetSlotID2
 	or not pItem1.SlotName
 	or not pItem2.SlotName
-	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+	or not OutfitterClassicAPI.CanEquipItemToSlot()
+	or OutfitterClassicAPI.HasPendingEquipmentChanges() then
 		return false;
 	end
 	
@@ -166,7 +201,8 @@ function OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(pEquippedItem, pTa
 	or not pBagItem.BagSlotIndex
 	or pBagItem.BagIndex < 0
 	or pBagItem.BagIndex > NUM_BAG_SLOTS
-	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+	or not OutfitterClassicAPI.CanEquipItemToSlot()
+	or OutfitterClassicAPI.HasPendingEquipmentChanges() then
 		return false;
 	end
 	
@@ -200,6 +236,14 @@ function OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(pEquippedItem, pTa
 		return false;
 	end
 	
+	if not OutfitterClassicAPI_BeginPendingEquipmentChanges(
+	{
+		{SlotID = pTargetSlotID, ItemGUID = vEquippedGUID},
+		{SlotID = pBagTargetSlotID, ItemGUID = vBagGUID},
+	}) then
+		return false;
+	end
+	
 	C_Item.EquipItemByName(vEquippedGUID, pTargetSlotID);
 	C_Item.EquipItemByName(vBagGUID, pBagTargetSlotID);
 	return true;
@@ -211,7 +255,7 @@ function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 	if not pChanges
 	or table.getn(pChanges) < 2
 	or not OutfitterClassicAPI.CanEquipItemToSlot()
-	or gOutfitterClassicAPI_OwnedEquipmentChange then
+	or OutfitterClassicAPI.HasPendingEquipmentChanges() then
 		return false;
 	end
 	
@@ -262,6 +306,10 @@ function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 	-- All sources are independent bag slots, so these atomic bag->paperdoll
 	-- swaps can be issued back-to-back. No later operation needs to re-resolve
 	-- a source changed by an earlier swap.
+	if not OutfitterClassicAPI_BeginPendingEquipmentChanges(vValidatedChanges) then
+		return false;
+	end
+	
 	for _, vChange in vValidatedChanges do
 		C_Item.EquipItemByName(vChange.ItemGUID, vChange.SlotID);
 	end
@@ -270,16 +318,23 @@ function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 end
 
 function OutfitterClassicAPI.ObservePlayerEquipmentChanged(pSlotID)
-	local vEquipmentChange = gOutfitterClassicAPI_OwnedEquipmentChange;
+	local vPendingChanges = gOutfitterClassicAPI_PendingEquipmentChanges;
+	local vExpectedGUID = vPendingChanges and pSlotID and vPendingChanges[pSlotID];
 	
-	if not vEquipmentChange
-	or not pSlotID
-	or vEquipmentChange.SlotID ~= pSlotID then
+	if not vExpectedGUID then
 		return nil;
 	end
 	
-	local vMatched = OutfitterClassicAPI.GetInventoryItemGUID(pSlotID) == vEquipmentChange.ItemGUID;
-	gOutfitterClassicAPI_OwnedEquipmentChange = nil;
+	if OutfitterClassicAPI.GetInventoryItemGUID(pSlotID) ~= vExpectedGUID then
+		return false;
+	end
 	
-	return vMatched;
+	vPendingChanges[pSlotID] = nil;
+	gOutfitterClassicAPI_NumPendingEquipmentChanges = gOutfitterClassicAPI_NumPendingEquipmentChanges - 1;
+	
+	if gOutfitterClassicAPI_NumPendingEquipmentChanges <= 0 then
+		OutfitterClassicAPI.ClearPendingEquipmentChanges();
+	end
+	
+	return true;
 end
