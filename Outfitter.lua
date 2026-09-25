@@ -513,7 +513,6 @@ local gOutfitter_IsFeigning = false;
 local gOutfitter_EquippedNeedsUpdate = false;
 local gOutfitter_WeaponsNeedUpdate = false;
 local gOutfitter_LastEquipmentUpdateTime = 0;
-local gOutfitter_LastEquipmentUpdateUsedLegacy = false;
 local Outfitter_cMinEquipmentUpdateInterval = 1.5;
 
 local gOutfitter_CurrentOutfit = nil;
@@ -2983,7 +2982,7 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 				OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
 			end
 			
-			return true;
+			return;
 		end
 	
 	-- P3 slice 3/2.0.10: a true two-item paperdoll exchange can be
@@ -3008,7 +3007,7 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 				pEquipmentChangeList[2].ItemLocation);
 		end
 		
-		return true;
+		return;
 	
 	-- P3 slice 4/2.0.11: legacy optimization inserts an explicit empty
 	-- before a one-way ring/trinket rotation. For the exact three-change form
@@ -3040,7 +3039,7 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 				pEquipmentChangeList[3].SlotName);
 		end
 		
-		return true;
+		return;
 	
 	-- P3 slice 2/2.0.9: burst only exact replacements whose source items are
 	-- all still in normal bags. The adapter validates the complete list before
@@ -3072,7 +3071,7 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 				end
 			end
 			
-			return true;
+			return;
 		end
 	end
 	
@@ -3111,8 +3110,6 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 			end
 		end
 	end
-	
-	return false;
 end
 
 function Outfitter_ExecuteEquipmentChangeList2(pEquipmentChangeList, pEmptySlots, pBagsFullErrorFormat, pExpectedEquippableItems)
@@ -3195,28 +3192,13 @@ function Outfitter_UpdateEquippedItems()
 	end
 	
 	local	vCurrentTime = GetTime();
-	local	vTimeSinceLastUpdate = vCurrentTime - gOutfitter_LastEquipmentUpdateTime;
-	local	vDirectChangesPending = OutfitterClassicAPI
-		and OutfitterClassicAPI.HasPendingEquipmentChanges
-		and OutfitterClassicAPI.HasPendingEquipmentChanges();
 	
-	-- P3 timing slice 1: direct ClassicAPI swaps are no longer held behind
-	-- the blanket 1.5-second legacy delay. Their expected paperdoll GUIDs are
-	-- tracked by the adapter and normally unlock as soon as equipment-change
-	-- events reconcile them. Keep 1.5 seconds as a failure ceiling, and retain
-	-- the original fixed delay after cursor-driven legacy execution.
-	if vDirectChangesPending then
-		if vTimeSinceLastUpdate < Outfitter_cMinEquipmentUpdateInterval then
-			OutfitterTimer_AdjustTimer();
-			return;
-		end
-		
-		OutfitterClassicAPI.ClearPendingEquipmentChanges();
-	elseif gOutfitter_LastEquipmentUpdateUsedLegacy
-	and vTimeSinceLastUpdate < Outfitter_cMinEquipmentUpdateInterval then
+	if vCurrentTime - gOutfitter_LastEquipmentUpdateTime < Outfitter_cMinEquipmentUpdateInterval then
 		OutfitterTimer_AdjustTimer();
 		return;
 	end
+	
+	gOutfitter_LastEquipmentUpdateTime = vCurrentTime;
 	
 	local	vWeaponsNeedUpdate = gOutfitter_WeaponsNeedUpdate;
 	
@@ -3270,9 +3252,7 @@ function Outfitter_UpdateEquippedItems()
 	if vEquipmentChangeList then
 		-- local	vExpectedEquippableItems = OutfitterItemList_New();
 	
-		local vUsedDirectExecutor = Outfitter_ExecuteEquipmentChangeList(vEquipmentChangeList, Outfitter_GetEmptyBagSlotList(), vExpectedEquippableItems);
-		gOutfitter_LastEquipmentUpdateTime = GetTime();
-		gOutfitter_LastEquipmentUpdateUsedLegacy = not vUsedDirectExecutor;
+		Outfitter_ExecuteEquipmentChangeList(vEquipmentChangeList, Outfitter_GetEmptyBagSlotList(), vExpectedEquippableItems);
 		
 		-- Outfitter_DumpArray("ExpectedEquippableItems", vExpectedEquippableItems);
 	end
