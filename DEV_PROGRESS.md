@@ -5,17 +5,17 @@
 ## Current
 - Repository: `Seraphic8x2244/Outfitter`
 - Branch: `dev`
-- Version: `2.0.8-dev`
+- Version: `2.0.9-dev`
 - Version-line decision: the 2.x line marks this fork as the ClassicAPI modernization of upstream Outfitter 1.4; patch `8` preserves the eight meaningful runtime/build states already reached before the line change. The accepted `0.1.1-dev` build remains recorded under its tested identity rather than being retroactively renamed.
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`
+- Current runtime/code head: `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
 - ClassicAPI research reference: brues-code/ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`
 - Goal: incrementally modernize Outfitter for WoW 1.12.1 using ClassicAPI while preserving the features and data model that make Outfitter distinct.
-- Current scope boundary: P1 and P2 are user-accepted on WoW 1.12.1 with ClassicAPI/pfUI. P2 exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd` passed normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema; bank-open, focused partial/special rechecks, and a true same-legacy-identity duplicate-instance case remain validation debt. P3 slice 1 is user-accepted on exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`: repeated one-slot enchanted/unenchanted glove swaps passed in both directions, multiple other outfit swaps passed, manual/character-screen changes remained external/manual, the preserved multi-slot executor remained healthy, and TOC-driven `0.1.1-dev` display was confirmed in the addon list and Outfitter character-screen UI. P3 slice 2 is now implemented at runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`, version `2.0.8-dev`: multi-change lists enter acknowledgement-driven ClassicAPI sequencing only when every change is an exact GUID-backed replacement sourced from a normal bag. Explicit unequips, slot-to-slot sources/dependencies, bank items, mixed/no-GUID lists, the 1.5-second throttle, and the 0.25-second retry loop remain on the legacy path. Slice 2 is compiler-checked and awaiting runtime validation.
+- Current scope boundary: P1 and P2 are user-accepted on WoW 1.12.1 with ClassicAPI/pfUI. P2 exact code head `2143a0cd29cc50a8e52d45040adacb299bf133cd` passed normal/rapid outfit swaps, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema; bank-open, focused partial/special rechecks, and a true same-legacy-identity duplicate-instance case remain validation debt. P3 slice 1 is user-accepted on exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`: repeated one-slot enchanted/unenchanted glove swaps passed in both directions, multiple other outfit swaps passed, manual/character-screen changes remained external/manual, the preserved multi-slot executor remained healthy, and TOC-driven `0.1.1-dev` display was confirmed in the addon list and Outfitter character-screen UI. P3 slice 2 at `2.0.8-dev` was runtime-exercised and revealed a visible ~0.1s-per-slot cadence on sets entering the acknowledgement chain, while legacy-fallback sets remained near-instant. Re-review of ClassicAPI showed that this acknowledgement wait was over-conservative for the narrow all-normal-bag replacement case. The recommendation changed accordingly. Current `2.0.9-dev` runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9` removes that per-slot wait: it validates the whole direct list up front, confirms every GUID is still in its exact distinct normal-bag source slot, confirms distinct destination slots, then issues the atomic bag->paperdoll swaps back-to-back. Any explicit unequip, slot-to-slot source/dependency, bank item, moved/ambiguous source, duplicate source/destination, mixed/no-GUID list remains on the unchanged legacy executor. The 1.5-second throttle and 0.25-second retry loop remain unchanged.
 
 ## Current Design / Development Contract
 
@@ -146,14 +146,17 @@ P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb
 ### Active Implementation Decision: P3
 P3 slice 1 was accepted on exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`.
 
-P3 slice 2 is implemented at runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`, version `2.0.8-dev`:
-- Multi-change execution now has a narrow direct path when there are two or more changes and every change is a non-empty replacement whose source item is in a normal bag and has a transient ClassicAPI GUID.
-- The adapter validates the complete sequence before issuing the first swap, stores only destination slot/GUID pairs, then issues one `C_Item.EquipItemByName` call at a time.
-- Each next swap is issued only after `PLAYER_EQUIPMENT_CHANGED` confirms the prior destination slot now contains the expected GUID.
-- A matching-slot acknowledgement with the wrong GUID aborts the owned sequence rather than guessing; normal reconciliation still runs.
-- Any explicit unequip, slot-to-slot source/dependency, bank source, missing GUID, or mixed list falls back as a whole to the unchanged legacy cursor executor.
-- The user-verified single-change path is unchanged.
-- The 1.5-second equipment-update throttle and 0.25-second retry loop are unchanged.
+P3 slice 2 was first implemented at `2.0.8-dev` with acknowledgement-driven one-at-a-time sequencing. User runtime testing showed that sets entering that path visibly equipped piece-by-piece at roughly ~0.1s per slot while legacy-fallback sets remained near-instant. That behavior was not present in original Outfitter and was traced to our own conservative wait, not an armor-specific rule.
+
+After re-reading pinned ClassicAPI internals, the design changed for `2.0.9-dev` at runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`:
+- The direct multi-change path remains limited to two-or-more non-empty replacements whose source items are in normal bags and have transient ClassicAPI GUIDs.
+- Before sending anything, the adapter verifies every runtime GUID still matches the exact recorded bag/slot, every source bag slot is distinct, and every destination equipment slot is distinct.
+- Only after the full list passes validation are the atomic `C_Item.EquipItemByName(itemGUID, dstSlot)` calls issued back-to-back.
+- This is safe for the current narrow bag->paperdoll case because each source is independent; an earlier swap only displaces the old equipped item into that incoming item's own vacated bag slot and does not relocate another future source.
+- If any precondition fails, the direct path sends nothing and the entire list falls back to legacy Outfitter.
+- Explicit unequips, slot-to-slot dependencies/sources, bank items, and mixed/no-GUID lists remain legacy.
+- There are no item-destruction calls in Outfitter's runtime. The direct path uses swap operations only; deletion is not a recovery mechanism.
+- The 1.5-second equipment-update throttle and 0.25-second retry loop remain unchanged.
 
 Historical slice 1 implementation details:
 - ClassicAPI `C_Item.EquipItemByName(itemGUID, dstSlot)` was verified in the pinned ClassicAPI source to use a cursor-free direct inventory swap when an explicit destination slot is supplied.
@@ -166,6 +169,9 @@ Historical slice 1 implementation details:
 - Stack compilation, special/Riding semantics, paperdoll integration, bank deposit/withdraw execution, SavedVariables, and UI behaviour are otherwise unchanged.
 
 ## Recent Relevant Commits
+- `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9` — `2.0.9-dev`: remove the per-slot acknowledgement wait for the narrow safe multi-change path; validate exact distinct bag sources/destinations first, then issue direct swaps back-to-back.
+- `16c6d5110e440da8a6d3075c6036d6e92fc8c9b8` — temporary Lua 5.0.2 validation commit for exact `2.0.9-dev` runtime files; Actions run `36153635758` passed all 8 runtime Lua files.
+- `a3c9afc7519c34185cb29d550bcda9f1096342e2` — removed the temporary `2.0.9-dev` validation workflow; runtime files unchanged from `0e2ec6f...`.
 - `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0` — P3 slice 2: sequence exact normal-bag multi-slot replacements across matching equipment-change acknowledgements; bump TOC to `2.0.8-dev`.
 - `7b61e32e96cf378078fd27c9dfeefe934a1d3986` — temporary Lua 5.0.2 validation commit for the exact slice 2 runtime files; GitHub Actions run `36148023987` passed.
 - `f73a7b3e7415c1284b8c1eb37984b87ff1b4c556` — removed the temporary slice 2 validation workflow; runtime files unchanged from `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`.
@@ -200,11 +206,12 @@ Historical slice 1 implementation details:
 - Baseline runtime is imported from CosminPOP/Outfitter.
 - Required addon-local BLP artwork is present.
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
-- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 2.0.8-dev`. `OutfitterStrings.lua` reads that version through `GetAddOnMetadata("Outfitter", "Version")`; the old hardcoded upstream `1.4` display value is removed.
+- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 2.0.9-dev`. `OutfitterStrings.lua` reads that version through `GetAddOnMetadata("Outfitter", "Version")`; the old hardcoded upstream `1.4` display value is removed.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented and user-verified.
 - P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is user-accepted after successful normal/rapid outfit switching, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema. Bank-open matching, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case remain explicit validation debt.
 - P3 slice 1 is implemented, compiler-checked, and user-accepted. Executor logic is `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`; the exact accepted runtime/code head is `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`. Repeated one-slot swaps between the unenchanted and 1% haste Gauntlets of the Righteous Champion passed in both directions, multiple other set swaps passed, manual character-screen equipment changes remained external/manual, and the preserved full-set/multi-slot path remained healthy. The UI correctly reports `0.1.1-dev` in both the addon list and Outfitter's character-screen title/pop-out.
-- P3 slice 2 is implemented and compiler-checked at exact runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`, version `2.0.8-dev`. It is awaiting in-game validation.
+- `2.0.8-dev` acknowledgement sequencing was partially runtime-tested: some sets were near-instant via legacy fallback, while direct-path sets visibly equipped piece-by-piece at roughly ~0.1s per slot. No Lua error was reported, but the added cadence was considered unnecessary after ClassicAPI re-review.
+- `2.0.9-dev` is implemented and compiler-checked at exact runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`. It replaces the acknowledgement wait with full-list prevalidation plus immediate direct burst for the same narrow safe case and is awaiting in-game validation.
 
 ## Static / Automated Checks
 - Imported runtime Lua/XML/localization files were verified content-identical to Cosmin's inspected head blobs; project metadata/docs are the intentional differences.
@@ -227,6 +234,8 @@ Historical slice 1 implementation details:
 - After correcting version ownership/display, real Lua 5.0.2 compiler validation passed all 8 runtime Lua files again in GitHub Actions run `36072774529` on validation commit `e687d60acda216ecb0b5a8a09b4a073c9d7c8219`; its addon runtime files match exact runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`. The temporary workflow was removed at `941a09ec5e9a4dcc6fe1fd1ba273fb9700aaefa2`.
 - P3 slice 2 diff review from accepted slice 1 to runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0` changes only `Outfitter.lua`, `OutfitterClassicAPI.lua`, and the TOC version. No outfit-stack, SavedVariables, automatic/special outfit, bank deposit/withdraw, paperdoll, Riding, throttle, or retry-loop code changed.
 - Real Lua 5.0.2 compiler validation passed all 8 runtime Lua files in GitHub Actions run `36148023987` on validation commit `7b61e32e96cf378078fd27c9dfeefe934a1d3986`; its addon runtime files exactly match runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`. The temporary workflow was removed at `f73a7b3e7415c1284b8c1eb37984b87ff1b4c556`.
+- `2.0.9-dev` diff review changes only `Outfitter.lua`, `OutfitterClassicAPI.lua`, and the TOC version. It removes the slice-2 acknowledgement state machine, adds exact bag-slot/GUID and duplicate source/destination prevalidation, and preserves all documented legacy fallbacks and timing code.
+- Real Lua 5.0.2 compiler validation passed all 8 runtime Lua files in GitHub Actions run `36153635758` on validation commit `16c6d5110e440da8a6d3075c6036d6e92fc8c9b8`; its addon runtime files exactly match runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`. The temporary workflow was removed at `a3c9afc7519c34185cb29d550bcda9f1096342e2`.
 - No static/compiler inspection is being counted as an in-game test.
 
 ## Current Issues
@@ -235,7 +244,7 @@ Historical slice 1 implementation details:
 - The original pre-existing Outfitter SavedVariables produced malformed/blank outfit names and odd disabled states. Deleting those SavedVariables fixed the problem; the old file is no longer available, so migration compatibility with that unknown prior schema cannot be diagnosed or claimed.
 - The earlier pre-initialization settings nil failures and repeated minimap-drag timer failure are fixed and user-verified not to recur in the tested setup.
 - Legacy Outfitter globally replaces `PaperDollItemSlotButton_OnClick`, creating a future coexistence risk with pfUI and other paperdoll addons.
-- P3 slice 1 physical execution is user-accepted: a single exact non-bank equip/replacement can use the cursor-free ClassicAPI path. P3 slice 2 now also sequences clean multi-change normal-bag replacement lists one acknowledged swap at a time, but this new multi-change path is not yet user-tested. Explicit unequip, bank-sourced, slot-to-slot dependency/source, mixed, and no-GUID cases remain cursor-driven.
+- P3 slice 1 physical execution is user-accepted: a single exact non-bank equip/replacement can use the cursor-free ClassicAPI path. `2.0.8-dev` showed that acknowledgement-by-acknowledgement multi-change sequencing adds visible per-slot latency. `2.0.9-dev` removes that wait for the same narrow safe all-normal-bag replacement case by validating all exact source GUID/locations first and then bursting atomic direct swaps. Explicit unequip, bank-sourced, slot-to-slot dependency/source, moved/ambiguous source, mixed, and no-GUID cases remain cursor-driven.
 - Legacy equipment updates still use the 1.5-second throttle and 0.25-second OnUpdate retry path; neither timing constraint has been relaxed yet.
 - Aura/item facts are still often derived through hidden tooltips.
 - Shared `C_EquipmentSet` state must not be used as hidden Outfitter storage.
@@ -245,28 +254,28 @@ Historical slice 1 implementation details:
 ## Testing
 
 ### Last Runtime Test
-- Version/commit: `0.1.1-dev`, exact P3 runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa`.
-- Passed: repeated Outfitter-driven one-slot swaps between the unenchanted and 1% haste Gauntlets of the Righteous Champion in both directions; the intended pair equipped correctly each time.
-- Passed: multiple other outfit/set swaps in different directions, including the preserved full-set/multi-slot executor.
-- Passed: manual character-screen equipment changes remained external/manual and were not immediately fought/reasserted.
-- Passed: TOC metadata displays `0.1.1-dev` in the addon list and Outfitter's character-screen title/pop-out.
-- Failed: None reported on the exercised P3 slice 1 paths.
-- Result: P3 slice 1 accepted.
-- Existing P2 validation debt remains unchanged: bank-open matching, a focused Partial outfit, a focused Special/automatic outfit, and a true same-legacy-identity duplicate-instance case.
+- Version/commit: `2.0.8-dev`, exact runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`.
+- Observed: some set swaps were effectively instantaneous.
+- Observed: other set swaps equipped visibly piece-by-piece with roughly ~0.1 seconds between slots.
+- No Lua error was reported.
+- Code review confirmed there was no armor-specific branch. The apparent armor bias was only tentative; armor slots more often fit the clean bag->fixed-slot case, while rings/trinkets/weapons more often hit legacy dependency/swap logic.
+- Interpretation changed after ClassicAPI re-review: the visible cadence came from our own acknowledgement wait and was unnecessary for the narrow independent normal-bag source case.
+- This result does not accept the `2.0.8-dev` sequencing design; it directly motivated `2.0.9-dev`.
 
 ### Next Runtime Test
-- After implementation/compiler validation, test P3 slice 2 on the new `2.0.8-dev` build.
-- Slice 2 scope is intentionally narrow: event-driven ClassicAPI sequencing only when a multi-change list contains two or more exact GUID-backed equip/replacements whose source items are all in normal bags.
-- Exercise an ordinary multi-slot outfit where the incoming items are bag-sourced; confirm every intended slot changes, no Lua errors occur, and repeated swaps remain correct.
-- Also exercise a case which contains an explicit unequip or slot-to-slot dependency and confirm it still follows the unchanged legacy executor.
-- Manual/pfUI equipment handling should remain external/manual.
-- Do not alter the 1.5-second throttle or 0.25-second retry loop during this slice.
+- Test `2.0.9-dev`, exact runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`.
+- Repeat the same sets which previously showed visible piece-by-piece ~0.1s cadence. Confirm they now complete essentially immediately while every intended item ends in the correct slot.
+- Repeat several swaps in both directions, including the enchanted/unenchanted Gauntlets of the Righteous Champion case.
+- Exercise at least one known legacy-fallback case involving an explicit unequip or slot-to-slot dependency/source and confirm it still behaves correctly.
+- Make one manual or pfUI equipment change afterward and confirm it remains external/manual.
+- Any wrong item, missing item, unexpected bag movement, Lua error, or server equip error fails the gate immediately. Do not broaden the executor beyond this narrow direct path until `2.0.9-dev` is user-verified.
+- The 1.5-second throttle and 0.25-second retry loop remain unchanged during this gate.
 
 ## Planned / Next Work
 - **P0 — baseline/workflow:** complete.
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
 - **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
-- **P3 — cursor-free executor:** active. Slice 1 at accepted runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa` is user-verified. Slice 2 at runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`, build `2.0.8-dev`, is implemented and compiler-checked; it sequences only all-exact normal-bag replacement lists across matching acknowledgements. Await runtime validation before broadening this executor or changing legacy timing.
+- **P3 — cursor-free executor:** active. Slice 1 at accepted runtime/code head `026bd1164d817dd6e4775f76df40dd293b2492fa` is user-verified. The first slice-2 design at `2.0.8-dev` exposed unnecessary acknowledgement latency. Current `2.0.9-dev` at runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9` keeps the same narrow direct scope but validates all exact distinct normal-bag sources up front and bursts the atomic swaps without waiting between slots. Await runtime validation before broadening this executor or changing legacy timing.
 - **P4 — automatic-state modernization:** replace tooltip parsing/broad polling for Riding, auras, forms, Swimming, and similar states only where a verified ClassicAPI fact exists; preserve fallback where needed.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
 - **P6 — optional C_EquipmentSet interoperability:** only after Outfitter's model/executor are stable, decide whether named Outfitter outfits should explicitly import/export/mirror user-visible ClassicAPI sets.
@@ -297,4 +306,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-test P3 slice 2 on build `2.0.8-dev`, exact runtime/code head `a3bbb8ddb30f7f0a19d2ba685c166b28206c06d0`. First use an ordinary multi-slot outfit where every incoming replacement item is currently in normal bags; repeat the swap in both directions and confirm every intended slot changes correctly with no Lua errors. Then exercise at least one fallback case containing an explicit unequip or a slot-to-slot source/dependency and confirm it still behaves like the accepted legacy path. Make one manual or pfUI slot change afterward and confirm it remains external/manual. Do not broaden the executor or alter the 1.5-second throttle / 0.25-second retry loop until this slice is user-verified.
+Runtime-test `2.0.9-dev`, exact runtime/code head `0e2ec6fbea2a4f0fda70dbdf13e3f9c98b4df3b9`. Re-run the sets which showed ~0.1s-per-slot sequencing on `2.0.8-dev`; they should now use the prevalidated direct burst and feel near-instant while still placing every exact intended item correctly. Repeat in both directions, include the enchanted/unenchanted glove case, then exercise one legacy-fallback case and one manual/pfUI equipment change. Treat any wrong/missing item, unexpected location, Lua error, or server equip error as a hard failure. Do not broaden the executor or alter the 1.5-second throttle / 0.25-second retry loop until this build is user-verified.
