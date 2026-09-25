@@ -46,6 +46,21 @@ function OutfitterClassicAPI.HasPlayerEquipmentChangedEvent()
 	return true;
 end
 
+function OutfitterClassicAPI.HasBagUpdateDelayedEvent()
+	if not OutfitterClassicAPI.IsAvailable() then
+		return false;
+	end
+	
+	if C_EventUtils
+	and C_EventUtils.IsEventValid then
+		return C_EventUtils.IsEventValid("BAG_UPDATE_DELAYED");
+	end
+	
+	-- Supported ClassicAPI builds provide this coalesced bag-change event.
+	return true;
+end
+
+
 function OutfitterClassicAPI.GetItemGUID(pItemLocation)
 	if not OutfitterClassicAPI.IsAvailable()
 	or not pItemLocation then

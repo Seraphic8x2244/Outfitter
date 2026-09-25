@@ -636,6 +636,11 @@ function Outfitter_OnLoad()
 	-- For indicating which outfits are missing items
 	
 	Outfitter_RegisterEvent(this, "BAG_UPDATE", Outfitter_BagUpdate);
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.HasBagUpdateDelayedEvent
+	and OutfitterClassicAPI.HasBagUpdateDelayedEvent() then
+		Outfitter_RegisterEvent(this, "BAG_UPDATE_DELAYED", Outfitter_BagUpdateDelayed);
+	end
 	Outfitter_RegisterEvent(this, "PLAYERBANKSLOTS_CHANGED", Outfitter_BankSlotsChanged);
 	
 	-- For monitoring bank bags
@@ -709,7 +714,17 @@ function Outfitter_OnEvent(pEvent)
 	--
 	
 	Outfitter_DispatchEvent(this, pEvent);
-	Outfitter_Update(false);
+	
+	-- BAG_UPDATE can fire repeatedly during one equipment operation. When
+	-- ClassicAPI's coalesced boundary is available, defer the visible-list
+	-- refresh until BAG_UPDATE_DELAYED while still invalidating each bag cache
+	-- immediately in Outfitter_BagUpdate.
+	if pEvent ~= "BAG_UPDATE"
+	or not OutfitterClassicAPI
+	or not OutfitterClassicAPI.HasBagUpdateDelayedEvent
+	or not OutfitterClassicAPI.HasBagUpdateDelayedEvent() then
+		Outfitter_Update(false);
+	end
 end
 
 function Outfitter_PlayerLeavingWorld()
@@ -812,6 +827,12 @@ function Outfitter_BagUpdate()
 	--
 	
 	gOutfitter_DisplayIsDirty = true;
+end
+
+function Outfitter_BagUpdateDelayed()
+	-- All BAG_UPDATE events for this frame have finished. The individual bag
+	-- caches were already invalidated as they arrived, so rebuild the visible
+	-- Outfitter state once at this stable boundary instead of once per bag.
 	Outfitter_Update(false);
 end
 
