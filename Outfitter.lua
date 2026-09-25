@@ -2985,6 +2985,30 @@ function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlo
 			return;
 		end
 	
+	-- P3 slice 3/2.0.10: a true two-item paperdoll exchange can be
+	-- completed by one atomic direct swap. Require an exact reciprocal pair;
+	-- anything more complex falls through to the existing paths below.
+	elseif vNumChanges == 2
+	and pEquipmentChangeList[1].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation
+	and pEquipmentChangeList[1].ItemLocation.SlotName == pEquipmentChangeList[2].SlotName
+	and pEquipmentChangeList[2].ItemLocation.SlotName == pEquipmentChangeList[1].SlotName
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.SwapEquippedItems
+	and OutfitterClassicAPI.SwapEquippedItems(
+		pEquipmentChangeList[1].ItemLocation,
+		pEquipmentChangeList[1].SlotID,
+		pEquipmentChangeList[2].ItemLocation,
+		pEquipmentChangeList[2].SlotID) then
+		if pExpectedEquippableItems then
+			OutfitterItemList_SwapLocations(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[1].ItemLocation,
+				pEquipmentChangeList[2].ItemLocation);
+		end
+		
+		return;
+	
 	-- P3 slice 2/2.0.9: burst only exact replacements whose source items are
 	-- all still in normal bags. The adapter validates the complete list before
 	-- issuing anything; any empty slot, bank item, equipped source, moved

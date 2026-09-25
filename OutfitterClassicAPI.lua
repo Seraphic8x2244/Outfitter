@@ -120,6 +120,43 @@ function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
 	return true;
 end
 
+function OutfitterClassicAPI.SwapEquippedItems(pItem1, pTargetSlotID1, pItem2, pTargetSlotID2)
+	if not pItem1
+	or not pItem2
+	or not pTargetSlotID1
+	or not pTargetSlotID2
+	or not pItem1.SlotName
+	or not pItem2.SlotName
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	local vSourceSlotID1 = GetInventorySlotInfo(pItem1.SlotName);
+	local vSourceSlotID2 = GetInventorySlotInfo(pItem2.SlotName);
+	
+	-- This slice handles only a true reciprocal paperdoll swap: item 1 is
+	-- currently in item 2's target slot and vice versa. One atomic swap then
+	-- completes both requested changes without any intermediate location state.
+	if vSourceSlotID1 ~= pTargetSlotID2
+	or vSourceSlotID2 ~= pTargetSlotID1 then
+		return false;
+	end
+	
+	local vItemGUID1 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem1);
+	local vItemGUID2 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem2);
+	
+	if not vItemGUID1
+	or not vItemGUID2
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID1) ~= vItemGUID1
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID2) ~= vItemGUID2 then
+		return false;
+	end
+	
+	C_Item.EquipItemByName(vItemGUID1, pTargetSlotID1);
+	return true;
+end
+
+
 function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
 	if not pChanges
 	or table.getn(pChanges) < 2
