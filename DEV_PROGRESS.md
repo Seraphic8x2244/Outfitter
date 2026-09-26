@@ -168,6 +168,20 @@ Historical slice 1 implementation details:
 - The hard-coded 1.5-second update throttle and 0.25-second OnUpdate retry loop are unchanged until this transaction boundary is runtime-proven.
 - Stack compilation, special/Riding semantics, paperdoll integration, bank deposit/withdraw execution, SavedVariables, and UI behaviour are otherwise unchanged.
 
+### Active Implementation Decision: P4
+P4 begins with a read-only audit against pinned ClassicAPI `fde3beca9dba18e7327802eb094b5bff81f39d47`. No runtime files changed during the audit.
+
+Audit findings:
+- Automatic/situational state detection is already event-driven. There is no periodic special-state polling loop to remove. `PLAYER_AURAS_CHANGED` triggers the broad aura/form refresh; zone, combat, death and Dining health/mana state use their existing events. The 0.25-second `OutfitterUpdateFrame` loop belongs to equipment retry/execution, not automatic-state detection, and is outside P4.
+- Riding currently comes from mount-buff tooltip text, including Cosmin/Turtle compatibility matches for the normal mount-speed text, generic `"Riding"`, and `"Slow and steady..."`. ClassicAPI exposes `IsMounted()`, backed directly by the player's mount-display descriptor field, which is a stronger semantic fact than tooltip text. Preserve the tooltip path as fallback/validation protection until the direct path is runtime-proven on the target Turtle-compatible setup.
+- ClassicAPI `C_UnitAuras` exposes player helpful-aura `name`, `icon` and `spellId` directly. One `AuraUtil.ForEachAura` / slot-based scan can preserve the existing aura-name/icon semantics for Dining, Shadowform, Ghost Wolf, Feign Death state, Hunter aspects and Evocate without reading hidden buff-tooltip lines on the ClassicAPI path.
+- Dining has no separate verified "is dining" state API. Its existing fork/knife and drink-icon semantics should remain aura-derived; only the source of aura metadata can be modernized. The existing UNIT_HEALTH/UNIT_MANA unequip rule remains unchanged.
+- ClassicAPI exposes `GetShapeshiftFormID()` plus `UPDATE_SHAPESHIFT_FORM`, providing a direct current-form fact and a dedicated change event. This can replace the legacy "aura changed -> enumerate available forms -> compare localized form names" mechanism on the ClassicAPI path.
+- Direct form migration must preserve the existing Outfitter state set only. Verified 1.12 form IDs cover current Warrior stances, Druid Cat/Bear/Dire Bear/Aquatic/Travel/Moonkin, Rogue Stealth, Shaman Ghost Wolf and Priest Shadowform. Do not silently add Spirit of Redemption, Turtle Tree of Life, or Turtle Swift Travel behavior merely because ClassicAPI exposes their form IDs.
+- ClassicAPI also exposes `IsSwimming()`, but the imported Outfitter baseline has no Swimming special outfit. This is capability evidence only; adding Swimming remains explicitly out of scope.
+- `OutfitterTooltip` is also used for item-stat and bind-on-equip inspection. P4 must not remove the hidden tooltip infrastructure wholesale; only automatic-state tooltip reads with a proven direct replacement are candidates.
+- ClassicAPI-specific state capability checks and reads should remain behind `OutfitterClassicAPI.lua`, preserving the existing architecture and native fallback boundary.
+
 ## Recent Relevant Commits
 - `de0ddd8468dab5d27388ab178cc4af432ed5ec78` — `2.0.18-dev`: fix inherited unchecked-slot reconciliation by updating the selected outfit only for checked, known slots.
 - `f1b653605815e2442b67f24ea19592860ef45d8d` — canonical Lua 5.0.3 validation state for `2.0.18-dev`; GitHub Actions run `36230875432` passed all 8 runtime Lua files using the exact VanillaTemplate checker content.
@@ -248,6 +262,7 @@ Historical slice 1 implementation details:
 - `Bindings.xml` was verified upstream and imported.
 - Legacy outfit stack, equipment update path, paperdoll hook, tooltip parsing, cursor swap path, and timer/throttle path were inspected.
 - ClassicAPI equipment-set, item GUID/location, explicit equipment-swap, and equipment-change event facilities were inspected.
+- P4 read-only audit inspected current Riding/aura/form/Dining event, tooltip and update paths plus pinned ClassicAPI state/aura/form facilities. Verified direct capabilities: descriptor-backed `IsMounted()`, `C_UnitAuras`/`AuraUtil` name/icon/spell data, descriptor-backed `GetShapeshiftFormID()`, and dedicated `UPDATE_SHAPESHIFT_FORM`. `IsSwimming()` also exists but does not justify adding a Swimming outfit.
 - pfUI's ClassicAPI Equipment Manager and paperdoll flyout module were inspected.
 - P1 diff review confirmed the runtime delta is limited to `OutfitterClassicAPI.lua`, its TOC entry, and small event registration/callback insertions in `Outfitter.lua`.
 - P1 adds no new top-level locals to the large legacy `Outfitter.lua`; the adapter is separate to avoid worsening Lua 5.0 top-level local pressure.
@@ -284,7 +299,7 @@ Historical slice 1 implementation details:
 - P3 slices 1–4 physical execution are user-accepted through `2.0.11-dev`. Safe public-API direct coverage now includes single exact replacements, independent normal-bag multi-replacements, exact reciprocal paired-slot exchanges, and the exact one-way ring/trinket rotation with bag replacement. Explicit unequip, weapon-specific multi-step rotations, bank, moved/ambiguous source, mixed unsupported, and no-GUID cases remain legacy. The `2.0.13-dev` timing experiment is rejected due to runtime hitching; `2.0.14-dev` restores accepted timing behavior.
 - Legacy equipment updates still use the 1.5-second throttle and 0.25-second OnUpdate retry path; neither timing constraint has been relaxed yet.
 - The inherited unchecked-slot outfit-editor bug is fixed and user-accepted in `2.0.18-dev`: `Outfitter_UpdateOutfitFromInventory` updates only slots whose checkbox is checked and not unknown. Unticked slots remain outside the outfit and inherit the last state supplied by another owning outfit or manual state.
-- Aura/item facts are still often derived through hidden tooltips.
+- Automatic aura-state detection still performs a broad helpful-aura scan and may read hidden buff-tooltip text on each `PLAYER_AURAS_CHANGED`. The P4 audit verified direct ClassicAPI replacements for Riding state, aura name/icon data and current shapeshift form; item-stat/BOE tooltip consumers remain separate and must not be removed wholesale.
 - Shared `C_EquipmentSet` state must not be used as hidden Outfitter storage.
 - External pfUI/ItemRack/manual swaps must not be mistaken for Outfitter-owned transactions.
 - Swimming requires an explicit design because it is absent from this imported baseline.
@@ -309,7 +324,7 @@ Historical slice 1 implementation details:
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
 - **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
 - **P3 — cursor-free executor/performance:** accepted at the current safe boundary through `2.0.18-dev`. Physical-executor slices 1–4 are user-accepted; `2.0.17-dev` materially shortened the hitch by coalescing legacy inventory reconciliation once per frame; `2.0.18-dev` restores correct partial-outfit slot ownership. The rejected `2.0.12/2.0.13` timing design stays rejected. Residual hitching is profiling debt, not a reason for more speculative timing changes.
-- **P4 — automatic-state modernization:** replace tooltip parsing/broad polling for Riding, auras, forms, Swimming, and similar states only where a verified ClassicAPI fact exists; preserve fallback where needed.
+- **P4 — automatic-state modernization:** read-only capability audit complete. No periodic special-state polling exists; the modernization target is the event-triggered broad aura/tooltip path. Verified direct ClassicAPI facts are `IsMounted()`, `C_UnitAuras`/`AuraUtil` aura name/icon/spell data, and `GetShapeshiftFormID()` with `UPDATE_SHAPESHIFT_FORM`. Preserve legacy fallback during validation; do not add Swimming or broaden the existing form/special-outfit set.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
 - **P6 — optional C_EquipmentSet interoperability:** only after Outfitter's model/executor are stable, decide whether named Outfitter outfits should explicitly import/export/mirror user-visible ClassicAPI sets.
 - **P7 — cleanup:** remove obsolete cursor/timer/polling/tooltip paths only after their replacements are runtime-proven.
@@ -339,4 +354,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Begin P4 with a read-only audit of automatic/situational state detection. Inventory every current hidden-tooltip/polling dependency for Riding, auras/forms, dining and related special outfits, then compare each one against verified ClassicAPI capabilities before changing behavior. Preserve current automatic-outfit semantics and Turtle riding compatibility; do not add Swimming or remove tooltip fallbacks unless the audit proves a direct replacement.
+Implement the first preservation-first P4 state bridge behind `OutfitterClassicAPI.lua`: expose verified ClassicAPI Riding, helpful-aura and shapeshift-form facts, then route automatic-state observation through those facts without changing special-outfit IDs, stack/priority semantics, Dining health/mana behavior, or zone behavior. Keep the existing tooltip/form logic as fallback and validation protection rather than deleting it immediately. Do not add Swimming, do not map Turtle-only Tree/Swift Travel form IDs into new Outfitter behavior, and do not touch the residual hitch, 1.5-second throttle, or 0.25-second equipment retry loop. Bump the TOC for the runtime slice and run the canonical Lua 5.0.3 check before presenting a runtime test gate.
