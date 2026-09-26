@@ -1,0 +1,35 @@
+name: Temporary Lua 5.0.3 check
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  lua503:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out Outfitter
+        uses: actions/checkout@v4
+      - name: Check out canonical VanillaTemplate checker
+        uses: actions/checkout@v4
+        with:
+          repository: Seraphic8x2244/VanillaTemplate
+          path: _vanilla_template
+      - name: Run canonical Lua 5.0.3 compiler check
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash _vanilla_template/tools/lua50/check_lua50.sh \
+            OutfitterClassicAPI.lua \
+            Outfitter.lua \
+            OutfitterStrings.lua \
+            OutfitterStrings_de.lua \
+            OutfitterStrings_fr.lua \
+            OutfitterStrings_cn.lua \
+            OutfitterStrings_tw.lua \
+            OutfitterStrings_kr.lua
