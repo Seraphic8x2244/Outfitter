@@ -3777,8 +3777,8 @@ function Outfitter_UpdateOutfitFromInventory(pOutfit, pNewItemsOutfit)
 		
 		local	vCheckbox = getglobal("OutfitterEnable"..vInventorySlot);
 		
-		if not vCheckbox:GetChecked()
-		or not vCheckbox.IsUnknown then
+		if vCheckbox:GetChecked()
+		and not vCheckbox.IsUnknown then
 			pOutfit.Items[vInventorySlot] = vItem;
 			Outfitter_NoteMessage(format(Outfitter_cAddingItem, vItem.Name, pOutfit.Name));
 			Outfitter_UpdateOutfitCategory(pOutfit);
