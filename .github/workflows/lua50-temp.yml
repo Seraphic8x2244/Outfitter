@@ -15,16 +15,11 @@ jobs:
     steps:
       - name: Check out Outfitter
         uses: actions/checkout@v4
-      - name: Check out canonical VanillaTemplate checker
-        uses: actions/checkout@v4
-        with:
-          repository: Seraphic8x2244/VanillaTemplate
-          path: _vanilla_template
       - name: Run canonical Lua 5.0.3 compiler check
         shell: bash
         run: |
           set -euo pipefail
-          bash _vanilla_template/tools/lua50/check_lua50.sh \
+          bash tools/lua50/check_lua50.sh \
             OutfitterClassicAPI.lua \
             Outfitter.lua \
             OutfitterStrings.lua \
