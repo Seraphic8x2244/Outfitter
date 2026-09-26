@@ -381,9 +381,9 @@
 								</Texture>
 								<FontString text="Outfitter_cTitle" inherits="GameFontNormalLarge">
 									<Anchors>
-										<Anchor point="TOP">
+										<Anchor point="LEFT" relativePoint="TOPLEFT">
 											<Offset>
-												<AbsDimension x="0" y="-36"/>
+												<AbsDimension x="42" y="-36"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -522,12 +522,12 @@
 							</ScrollFrame>
 							<Button name="OutfitterNewButton" inherits="UIPanelButtonTemplate" text="Outfitter_cNewOutfit">
 								<Size>
-									<AbsDimension x="115" y="21" />
+									<AbsDimension x="95" y="25" />
 								</Size>
 								<Anchors>
-									<Anchor point="BOTTOMRIGHT">
+									<Anchor point="RIGHT" relativePoint="TOPRIGHT">
 										<Offset>
-											<AbsDimension x="-7" y="6" />
+											<AbsDimension x="-14" y="-36" />
 										</Offset>
 									</Anchor>
 								</Anchors>
