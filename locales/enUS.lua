@@ -225,9 +225,10 @@ Outfitter_cEquipOutfitMessageFormat = "Outfitter: %s equipped";
 Outfitter_cUnequipOutfitMessageFormat = "Outfitter: %s unequipped";
 
 Outfitter_cAboutTitle = "About Outfitter";
-Outfitter_cAuthor = "Designed and written by John Stephen";
+Outfitter_cAuthor = "Originally designed and written by John Stephen";
+Outfitter_cMaintainer = "Updated and maintained by Revenga";
 Outfitter_cTestersTitle = "Beta Testers";
-Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Harper, Kallah and Sumitra";
+Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Gaia, Harper, Kallah and Sumitra";
 Outfitter_cSpecialThanksTitle = "Special thanks for their support to";
 Outfitter_cSpecialThanksNames = "Brian, Dave, Glenn, Leah, Mark, The Mighty Pol, SFC and Forge";
 Outfitter_cGuildURL = "http://www.starfleetclan.com";

@@ -215,7 +215,7 @@ if GetLocale() == "frFR" then
 	Outfitter_cAboutTitle = "A propos d\226\128\153Outfitter";
 	Outfitter_cAuthor = "Designed and written by Baylord of Thunderlord";
 	Outfitter_cTestersTitle = "Beta Testers";
-	Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Harper, Kallah and Sumitra";
+	Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Gaia, Harper, Kallah and Sumitra";
 	Outfitter_cSpecialThanksTitle = "Special thanks for their support to";
 	Outfitter_cSpecialThanksNames = "Brian, Dave, Glenn, Leah, Mark, The Mighty Pol, SFC and Forge";
 	Outfitter_cGuildURL = "http://www.starfleetclan.com";

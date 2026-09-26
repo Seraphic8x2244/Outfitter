@@ -695,7 +695,10 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString name="OutfitterAboutTitleVersion" text="Outfitter_cTitleVersion" inherits="GameFontNormalLarge">
+								<FontString name="OutfitterAboutAuthor" text="Outfitter_cAuthor" inherits="GameFontHighlight">
+									<Size>
+										<AbsDimension x="230"/>
+									</Size>
 									<Anchors>
 										<Anchor point="TOP">
 											<Offset>
@@ -704,12 +707,12 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString name="OutfitterAboutAuthor" text="Outfitter_cAuthor" inherits="GameFontHighlight">
+								<FontString name="OutfitterAboutMaintainer" text="Outfitter_cMaintainer" inherits="GameFontHighlight">
 									<Size>
 										<AbsDimension x="230"/>
 									</Size>
 									<Anchors>
-										<Anchor point="TOP" relativeTo="OutfitterAboutTitleVersion" relativePoint="BOTTOM">
+										<Anchor point="TOP" relativeTo="OutfitterAboutAuthor" relativePoint="BOTTOM">
 											<Offset>
 												<AbsDimension x="0" y="-5"/>
 											</Offset>
@@ -721,9 +724,9 @@
 										<AbsDimension x="230"/>
 									</Size>
 									<Anchors>
-										<Anchor point="TOP" relativeTo="OutfitterAboutTitleVersion" relativePoint="TOP">
+										<Anchor point="TOP" relativeTo="OutfitterAboutMaintainer" relativePoint="BOTTOM">
 											<Offset>
-												<AbsDimension x="0" y="-65"/>
+												<AbsDimension x="0" y="-20"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
