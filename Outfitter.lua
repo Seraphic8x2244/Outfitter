@@ -60,6 +60,64 @@ function OutfitterClassicAPI.HasBagUpdateDelayedEvent()
 	return true;
 end
 
+-- P4 automatic-state observation bridge. These helpers expose ClassicAPI facts
+-- only; legacy Outfitter state/priority logic remains the owner of decisions.
+-- A nil result means the relevant ClassicAPI capability isn't available and
+-- callers must retain the established Vanilla fallback.
+
+function OutfitterClassicAPI.GetRidingState()
+	if type(IsMounted) ~= "function" then
+		return nil;
+	end
+	
+	return IsMounted() and true or false;
+end
+
+function OutfitterClassicAPI.GetHelpfulAuraInfo(pIndex)
+	if type(C_UnitAuras) ~= "table"
+	or type(C_UnitAuras.GetBuffDataByIndex) ~= "function"
+	or not pIndex then
+		return nil;
+	end
+	
+	local vAuraData = C_UnitAuras.GetBuffDataByIndex("player", pIndex);
+	
+	if not vAuraData then
+		return nil;
+	end
+	
+	return vAuraData.name, vAuraData.icon, vAuraData.spellId;
+end
+
+function OutfitterClassicAPI.GetShapeshiftFormID()
+	if type(GetShapeshiftFormID) ~= "function" then
+		return nil;
+	end
+	
+	local vFormID = GetShapeshiftFormID();
+	
+	if type(vFormID) ~= "number" then
+		return nil;
+	end
+	
+	return vFormID;
+end
+
+function OutfitterClassicAPI.HasShapeshiftFormChangedEvent()
+	if type(GetShapeshiftFormID) ~= "function" then
+		return false;
+	end
+	
+	if C_EventUtils
+	and C_EventUtils.IsEventValid then
+		return C_EventUtils.IsEventValid("UPDATE_SHAPESHIFT_FORM");
+	end
+	
+	-- ClassicAPI builds which expose GetShapeshiftFormID also synthesize the
+	-- matching single-form change event.
+	return true;
+end
+
 
 function OutfitterClassicAPI.GetItemGUID(pItemLocation)
 	if not OutfitterClassicAPI.IsAvailable()
