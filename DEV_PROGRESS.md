@@ -5,11 +5,11 @@
 ## Current
 - Repository: `Seraphic8x2244/Outfitter`
 - Branch: `dev`
-- Version: `2.0.18-dev`
+- Version: `2.0.19-dev`
 - Version-line decision: the 2.x line marks this fork as the ClassicAPI modernization of upstream Outfitter 1.4; patch `8` preserves the eight meaningful runtime/build states already reached before the line change. The accepted `0.1.1-dev` build remains recorded under its tested identity rather than being retroactively renamed.
 - Development/handoff head: the commit containing this file; verify the remote `dev` head before editing.
 - Pre-centralization branch head: `9088afb9544cdcb4791a5ae61b69e4b407ff975f`
-- Current runtime/code head: `de0ddd8468dab5d27388ab178cc4af432ed5ec78`
+- Current runtime/code head: `c83967e6dfc9f6a174e29d5463ccc8d3c3b648bf`
 - Main baseline: `e51322efd2b62a5bc792a8a4fd599c0ed39cdda7` — repository scaffold only, not a runnable addon release.
 - Stable baseline/release: None in this repository.
 - Upstream runtime baseline: CosminPOP/Outfitter `4587638ae5bd10eb9bc83bbae87a092e4b892d94`
@@ -30,6 +30,9 @@
 - pfUI compatibility is a first-class target. Turtle/Octo-style enhanced clients should be supported where practical without distorting the core design.
 
 ### Architecture / Ownership
+- Runtime architecture is intentionally single-file: all executable addon logic lives in `Outfitter.lua`.
+- User-facing strings live under `locales/`; `locales/enUS.lua` supplies the base/default strings and locale-specific files override them conditionally.
+- `OutfitterClassicAPI.lua` was introduced during P1 without explicit agreement and has now been reconciled back into `Outfitter.lua` in `2.0.19-dev`; future ClassicAPI work stays in the existing namespace section rather than creating another runtime module.
 - `gOutfitter_Settings.Outfits` remains the authoritative persisted outfit model.
 - `gOutfitter_OutfitStack` remains the runtime layering/priority model.
 - Compile the stack bottom-to-top: higher outfits override only the slots they define.
@@ -40,7 +43,7 @@
 - Existing ordering semantics are product behaviour; for example Argent Dawn can sit below Riding so overlapping Riding slots temporarily win.
 - Outfit bindings and automatic/situational activation remain Outfitter-owned features.
 - The existing inventory reconciliation path, `Outfitter_InventoryChanged2`, is the current authoritative owner for observed equipment changes. New observation sources should route through it until a deliberate ownership change is made.
-- ClassicAPI integration lives behind `OutfitterClassicAPI.lua`; avoid scattering extension checks through the legacy file.
+- Outfitter uses one runtime logic file: `Outfitter.lua`. ClassicAPI integration remains grouped behind the `OutfitterClassicAPI` namespace inside that file; do not split runtime logic into another Lua file without explicit agreement.
 
 ### Protocol / Data Model
 - Per-character SavedVariables remain rooted at `gOutfitter_Settings`.
@@ -134,7 +137,7 @@ Rapid switching then exposed a separate legacy minimap-drag/timer invariant fail
 ### Active Implementation Decision: P2
 P2 item-identity modernization is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`:
 - Physical inventory/bag item records receive ClassicAPI per-instance GUIDs when the API can resolve them.
-- Runtime GUID associations live in `OutfitterClassicAPI.lua` in a weak-key side-map; no GUID field was added to persisted outfit records or the SavedVariables schema.
+- Runtime GUID associations live in the `OutfitterClassicAPI` namespace inside `Outfitter.lua` in a weak-key side-map; no GUID field was added to persisted outfit records or the SavedVariables schema.
 - The equippable-item cache now indexes live physical items by GUID in addition to the legacy code/slot indexes.
 - Matching prefers an exact GUID hit when both the outfit-side runtime identity and live item are available.
 - Existing saved outfits and any location/API gaps continue through the original code/subcode/enchant fallback; a successful fallback match hydrates the outfit item's transient GUID for later exact matching in the same session.
@@ -180,7 +183,7 @@ Audit findings:
 - Direct form migration must preserve the existing Outfitter state set only. Verified 1.12 form IDs cover current Warrior stances, Druid Cat/Bear/Dire Bear/Aquatic/Travel/Moonkin, Rogue Stealth, Shaman Ghost Wolf and Priest Shadowform. Do not silently add Spirit of Redemption, Turtle Tree of Life, or Turtle Swift Travel behavior merely because ClassicAPI exposes their form IDs.
 - ClassicAPI also exposes `IsSwimming()`, but the imported Outfitter baseline has no Swimming special outfit. This is capability evidence only; adding Swimming remains explicitly out of scope.
 - `OutfitterTooltip` is also used for item-stat and bind-on-equip inspection. P4 must not remove the hidden tooltip infrastructure wholesale; only automatic-state tooltip reads with a proven direct replacement are candidates.
-- ClassicAPI-specific state capability checks and reads should remain behind `OutfitterClassicAPI.lua`, preserving the existing architecture and native fallback boundary.
+- ClassicAPI-specific state capability checks and reads should remain grouped behind the `OutfitterClassicAPI` namespace inside `Outfitter.lua`, preserving one runtime logic file and the native fallback boundary.
 
 ## Recent Relevant Commits
 - `de0ddd8468dab5d27388ab178cc4af432ed5ec78` — `2.0.18-dev`: fix inherited unchecked-slot reconciliation by updating the selected outfit only for checked, known slots.
@@ -245,7 +248,7 @@ Audit findings:
 - Baseline runtime is imported from CosminPOP/Outfitter.
 - Required addon-local BLP artwork is present.
 - `Bindings.xml` is present; it is loaded by WoW convention outside the TOC list.
-- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 2.0.18-dev`. `OutfitterStrings.lua` reads that version through `GetAddOnMetadata("Outfitter", "Version")`; the old hardcoded upstream `1.4` display value is removed.
+- `Outfitter.toc` owns the development version: `## Title: Outfitter-dev`, `## Version: 2.0.19-dev`. `OutfitterStrings.lua` reads that version through `GetAddOnMetadata("Outfitter", "Version")`; the old hardcoded upstream `1.4` display value is removed.
 - P1 ClassicAPI observation/identity bridge plus initialization/preflight hardening and the minimap drag-state fix are implemented and user-verified.
 - P2 runtime item identity is implemented at `2143a0cd29cc50a8e52d45040adacb299bf133cd`: transient GUID associations, GUID-indexed live items, exact-match preference, and legacy fallback hydration. It is user-accepted after successful normal/rapid outfit switching, manual equipment changes, pfUI character-slot flyout changes, reload persistence, and unchanged SavedVariables schema. Bank-open matching, focused partial/special-outfit rechecks, and a true same-legacy-identity duplicate-instance case remain explicit validation debt.
 - P3 slice 1 is implemented, compiler-checked, and user-accepted. Executor logic is `5b2f20a93a3e1e743ff6f5a7ae39739928f7aa5e`; the exact accepted runtime/code head is `026bd1164d817dd6e4775f76df40dd293b2492fa`, version `0.1.1-dev`. Repeated one-slot swaps between the unenchanted and 1% haste Gauntlets of the Righteous Champion passed in both directions, multiple other set swaps passed, manual character-screen equipment changes remained external/manual, and the preserved full-set/multi-slot path remained healthy. The UI correctly reports `0.1.1-dev` in both the addon list and Outfitter's character-screen title/pop-out.
@@ -264,8 +267,8 @@ Audit findings:
 - ClassicAPI equipment-set, item GUID/location, explicit equipment-swap, and equipment-change event facilities were inspected.
 - P4 read-only audit inspected current Riding/aura/form/Dining event, tooltip and update paths plus pinned ClassicAPI state/aura/form facilities. Verified direct capabilities: descriptor-backed `IsMounted()`, `C_UnitAuras`/`AuraUtil` name/icon/spell data, descriptor-backed `GetShapeshiftFormID()`, and dedicated `UPDATE_SHAPESHIFT_FORM`. `IsSwimming()` also exists but does not justify adding a Swimming outfit.
 - pfUI's ClassicAPI Equipment Manager and paperdoll flyout module were inspected.
-- P1 diff review confirmed the runtime delta is limited to `OutfitterClassicAPI.lua`, its TOC entry, and small event registration/callback insertions in `Outfitter.lua`.
-- P1 adds no new top-level locals to the large legacy `Outfitter.lua`; the adapter is separate to avoid worsening Lua 5.0 top-level local pressure.
+- Historical P1 diff review confirmed the original runtime delta was limited to the then-separate `OutfitterClassicAPI.lua`, its TOC entry, and small event registration/callback insertions in `Outfitter.lua`.
+- `2.0.19-dev` deliberately reverses that temporary split: the ClassicAPI namespace is concatenated into `Outfitter.lua`. Canonical Lua 5.0.3 compilation passes after consolidation, so top-level local pressure does not require a second runtime logic file.
 - Static review of the initialization call chain and all 98 direct `gOutfitter_Settings` references identified and closed the remaining defensible pre-init/partial-settings hazards without altering outfit semantics.
 - Real Lua 5.0.2 compiler check passed all 8 runtime Lua files after the full preflight hardening pass.
 - Real Lua 5.0.2 compiler check also passed all 8 runtime Lua files after the drag-state fix. That successful run was on validation commit `1f34cf97f09cc3cb55b6666f320afe57e0e058bf`, whose runtime files match runtime/code head `dcc3f3572c201a568eb5471ebf52019fb42feefe`; the temporary workflow was removed afterward at `ea16a761de1c2d857ec63e34ce8d85c2d676f35c`.
@@ -354,4 +357,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Implement the first preservation-first P4 state bridge behind `OutfitterClassicAPI.lua`: expose verified ClassicAPI Riding, helpful-aura and shapeshift-form facts, then route automatic-state observation through those facts without changing special-outfit IDs, stack/priority semantics, Dining health/mana behavior, or zone behavior. Keep the existing tooltip/form logic as fallback and validation protection rather than deleting it immediately. Do not add Swimming, do not map Turtle-only Tree/Swift Travel form IDs into new Outfitter behavior, and do not touch the residual hitch, 1.5-second throttle, or 0.25-second equipment retry loop. Bump the TOC for the runtime slice and run the canonical Lua 5.0.3 check before presenting a runtime test gate.
+Runtime-smoke-test `2.0.19-dev` before adding new P4 behavior: confirm the addon loads without Lua errors, reports `2.0.19-dev`, opens normally, and a normal saved-outfit swap plus a manual gear change still behave as in the accepted `2.0.18-dev` baseline. If that structural gate passes, resume P4 by implementing the first preservation-first ClassicAPI state bridge inside the existing `OutfitterClassicAPI` namespace in `Outfitter.lua`: expose verified Riding, helpful-aura and shapeshift-form facts without changing special-outfit IDs, stack/priority semantics, Dining health/mana behavior, or zone behavior. Keep existing tooltip/form logic as fallback and validation protection. Do not add Swimming, do not add Turtle-only Tree/Swift Travel behavior, and do not touch the residual hitch, 1.5-second throttle, or 0.25-second equipment retry loop.
