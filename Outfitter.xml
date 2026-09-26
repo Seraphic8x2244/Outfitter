@@ -419,12 +419,12 @@
 						<Frames>
 							<Frame name="$parentScrollbarTrench" inherits="OutfitterScrollbarTrenchTemplate">
 								<Size>
-									<AbsDimension x="27" y="258"/>
+									<AbsDimension x="27" y="276"/>
 								</Size>
 								<Anchors>
 									<Anchor point="BOTTOMRIGHT" relativeTo="$parentButtonBarBackground" relativePoint="TOPRIGHT">
 										<Offset>
-											<AbsDimension x="0" y="1"/>
+											<AbsDimension x="0" y="-17"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
@@ -503,9 +503,14 @@
 									<Anchor point="TOPLEFT" relativeTo="OutfitterItem12" relativePoint="BOTTOMLEFT" />
 								</Anchors>
 							</Button>
+							<Button name="OutfitterItem14" inherits="OutfitterItemTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="OutfitterItem13" relativePoint="BOTTOMLEFT" />
+								</Anchors>
+							</Button>
 							<ScrollFrame name="$parentScrollFrame" hidden="false" inherits="FauxScrollFrameTemplate">
 								<Size>
-									<AbsDimension x="224" y="252"/>
+									<AbsDimension x="224" y="270"/>
 								</Size>
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="OutfitterItem0">

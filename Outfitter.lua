@@ -883,7 +883,7 @@ local gOutfitter_EquippableItems = nil;
 local gOutfitter_Initialized = false;
 local gOutfitter_Suspended = false;
 
-local Outfitter_cMaxDisplayedItems = 14;
+local Outfitter_cMaxDisplayedItems = 15;
 
 local gOutfitter_PanelFrames =
 {
