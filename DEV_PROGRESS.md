@@ -335,16 +335,13 @@ Implementation status:
 ## Testing
 
 ### Last Runtime Test
-- Version/runtime head: `2.0.26-dev`, `c6fffcfd1cc6c6699305408fad8451cb248b5be0`.
-- Passed: the 15-row Outfits viewport is present, the list still starts at the accepted top position, and the extended scrollbar/trench behaves correctly without colliding with the tabs.
-- Passed: the accepted `2.0.24-dev` header/tab/version chrome remains correct.
-- Passed: About shows `About Outfitter`, `Originally designed and written by John Stephen`, and `Updated and maintained by Revenga`.
-- Passed: Gaia is included in Beta Testers; existing tester names, Special Thanks credits, and guild URLs remain present.
-- Passed: the duplicate About-page `Outfitter <version>` line is gone.
-- Result: `2.0.26-dev` UI/content follow-up accepted.
+- Version/runtime head: `2.0.27-dev`, `ba029badd87b2732fc5e2d8436cffdb6ca621eff`.
+- Passed: mount/dismount combinations are working on the ClassicAPI Riding path; the existing Riding special outfit activates and deactivates correctly through repeated mount-state changes.
+- Not yet specifically checked in this pass: reload while unmounted, an ordinary saved-outfit switch, one non-Riding automatic state, and the non-`IsMounted()` Cosmin/Turtle tooltip fallback.
+- Result: core `2.0.27-dev` Riding activation/deactivation behavior passes; remaining regression/fallback checks are still open.
 
 ### Next Runtime Test
-- Runtime-check `2.0.27-dev`: verify the Riding special outfit activates on mount and deactivates on dismount with ClassicAPI/`IsMounted()` available, including repeated mount/dismount cycles and a reload while unmounted. Where practical, also verify the preserved Cosmin/Turtle aura-tooltip fallback with the Riding capability unavailable. Confirm ordinary automatic outfits and normal outfit switching remain unchanged.
+- Finish the `2.0.27-dev` regression check: reload while unmounted and confirm Riding stays inactive; switch one ordinary saved outfit; trigger one existing non-Riding automatic state. The non-`IsMounted()` Cosmin/Turtle tooltip fallback remains validation debt unless a practical test setup is available.
 - Keep the residual outfit-change hitch as profiling debt; do not resume speculative timing changes without instrumentation.
 - P3 direct execution remains intentionally bounded at the accepted safe public-API cases; unsupported weapon/unequip/bank/mixed cases retain legacy fallback.
 
@@ -353,7 +350,7 @@ Implementation status:
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
 - **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
 - **P3 — cursor-free executor/performance:** accepted at the current safe boundary through `2.0.18-dev`. Physical-executor slices 1–4 are user-accepted; `2.0.17-dev` materially shortened the hitch by coalescing legacy inventory reconciliation once per frame; `2.0.18-dev` restores correct partial-outfit slot ownership. The rejected `2.0.12/2.0.13` timing design stays rejected. Residual hitching is profiling debt, not a reason for more speculative timing changes.
-- **P4 — automatic-state modernization:** read-only capability audit complete. `2.0.20-dev` exposed Riding, helpful-aura and shapeshift facts behind the existing `OutfitterClassicAPI` namespace. `2.0.27-dev` is the first single-consumer integration: Riding uses `GetRidingState()` when available and preserves the Cosmin/Turtle tooltip heuristic only as the non-capability fallback. This slice is compiler-checked and awaits runtime validation. Helpful-aura and shapeshift bridge consumption, Swimming, and any broader special-outfit expansion remain deferred.
+- **P4 — automatic-state modernization:** read-only capability audit complete. `2.0.20-dev` exposed Riding, helpful-aura and shapeshift facts behind the existing `OutfitterClassicAPI` namespace. `2.0.27-dev` is the first single-consumer integration: Riding uses `GetRidingState()` when available and preserves the Cosmin/Turtle tooltip heuristic only as the non-capability fallback. Core repeated mount/dismount activation/deactivation is user-verified; reload/general-regression checks and the unavailable-capability fallback remain open. Helpful-aura and shapeshift bridge consumption, Swimming, and any broader special-outfit expansion remain deferred.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
 - **P6 — optional C_EquipmentSet interoperability:** only after Outfitter's model/executor are stable, decide whether named Outfitter outfits should explicitly import/export/mirror user-visible ClassicAPI sets.
 - **P7 — cleanup:** remove obsolete cursor/timer/polling/tooltip paths only after their replacements are runtime-proven.
@@ -383,4 +380,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-check `2.0.27-dev` Riding only. With ClassicAPI active, verify mounting equips the existing Riding special outfit and dismounting removes it, repeat the cycle several times, and confirm a reload while unmounted does not leave Riding active. If a safe test setup is available without the `IsMounted()` capability, verify the preserved Cosmin/Turtle tooltip fallback still activates/deactivates the same Riding outfit. Also confirm one ordinary saved-outfit switch and one existing non-Riding automatic state still behave normally. Do not consume the helpful-aura or shapeshift bridge, add Swimming or Turtle-only Tree/Swift Travel behavior, or resume hitch/timing work until this Riding slice is accepted.
+Finish `2.0.27-dev` runtime validation with three focused checks: reload while unmounted and confirm Riding remains inactive; switch one ordinary saved outfit; trigger one existing non-Riding automatic state. Treat the non-`IsMounted()` Cosmin/Turtle tooltip fallback as explicit validation debt if there is no practical way to disable that capability. Do not consume the helpful-aura or shapeshift bridge, add Swimming or Turtle-only Tree/Swift Travel behavior, or resume hitch/timing work until this Riding slice is accepted.
