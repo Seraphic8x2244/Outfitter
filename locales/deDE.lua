@@ -7,7 +7,7 @@ if GetLocale() == "deDE" then
 	Outfitter_cUseCurrentOutfit = "Benutze derzeitiges Outfit";
 	Outfitter_cUseEmptyOutfit = "Erstelle neues Outfit";
 
-	Outfitter_cOutfitterTabTitle = "Outfitter";
+	Outfitter_cOutfitterTabTitle = "Outfits";
 	Outfitter_cOptionsTabTitle = "Einstellungen";
 	Outfitter_cAboutTabTitle = "\195\188ber";
 

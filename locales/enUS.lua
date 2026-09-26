@@ -1,14 +1,14 @@
 Outfitter_cVersion = GetAddOnMetadata("Outfitter", "Version");
 
 Outfitter_cTitle = "Outfitter";
-Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;
+Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;\nOutfitter_cFrameVersion = "v"..Outfitter_cVersion;
 
 Outfitter_cNameLabel = "Name:";
 Outfitter_cCreateUsingTitle = "Optimize for:";
 Outfitter_cUseCurrentOutfit = "Use Current Outfit";
 Outfitter_cUseEmptyOutfit = "Create Empty Outfit";
 
-Outfitter_cOutfitterTabTitle = "Outfitter";
+Outfitter_cOutfitterTabTitle = "Outfits";
 Outfitter_cOptionsTabTitle = "Options";
 Outfitter_cAboutTabTitle = "About";
 

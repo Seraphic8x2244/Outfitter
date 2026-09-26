@@ -7,7 +7,7 @@ if GetLocale() == "koKR" then
 	Outfitter_cUseCurrentOutfit = "현재 장비 세트 사용";
 	Outfitter_cUseEmptyOutfit = "빈 장비 세트 만듬";
 
-	Outfitter_cOutfitterTabTitle = "Outfitter";
+	Outfitter_cOutfitterTabTitle = "Outfits";
 	Outfitter_cOptionsTabTitle = "옵션";
 	Outfitter_cAboutTabTitle = "정보";
 

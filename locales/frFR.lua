@@ -7,7 +7,7 @@ if GetLocale() == "frFR" then
 	Outfitter_cUseCurrentOutfit = "Utiliser la tenue actuelle";
 	Outfitter_cUseEmptyOutfit = "Cr\195\169er une tenue vide";
 
-	Outfitter_cOutfitterTabTitle = "Outfitter";
+	Outfitter_cOutfitterTabTitle = "Outfits";
 	Outfitter_cOptionsTabTitle = "Options";
 	Outfitter_cAboutTabTitle = "A propos";
 

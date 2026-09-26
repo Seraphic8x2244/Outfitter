@@ -346,7 +346,7 @@
 						</Texture>
 					</Layer>
 					<Layer level="OVERLAY">
-						<FontString name="$parentTitle" text="Outfitter_cTitleVersion" inherits="GameFontHighlight">
+						<FontString name="$parentTitle" text="Outfitter_cFrameVersion" inherits="GameFontHighlight">
 							<Anchors>
 								<Anchor point="TOP">
 									<Offset>
@@ -383,7 +383,7 @@
 									<Anchors>
 										<Anchor point="LEFT" relativePoint="TOPLEFT">
 											<Offset>
-												<AbsDimension x="42" y="-36"/>
+												<AbsDimension x="42" y="-43"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -402,7 +402,7 @@
 										</Anchor>
 									</Anchors>
 								</Texture>
-								<Texture name="$parentButtonBarBackground" file="Interface\Addons\Outfitter\Textures\ButtonBarBackground">
+								<Texture name="$parentButtonBarBackground" hidden="true" file="Interface\Addons\Outfitter\Textures\ButtonBarBackground">
 									<Size>
 										<AbsDimension x="253" y="20"/>
 									</Size>
@@ -527,7 +527,7 @@
 								<Anchors>
 									<Anchor point="RIGHT" relativePoint="TOPRIGHT">
 										<Offset>
-											<AbsDimension x="-14" y="-36" />
+											<AbsDimension x="-14" y="-43" />
 										</Offset>
 									</Anchor>
 								</Anchors>
