@@ -323,16 +323,16 @@ Audit findings:
 ## Testing
 
 ### Last Runtime Test
-- Version/runtime head: `2.0.24-dev`, `c81bf220ca90ebe65f57ba89795c51d2a491e1ba`.
-- Passed: active tab is labelled `Outfits` and joins the page like `Options` without the extra light-grey strip/border.
-- Passed: the inner `Outfitter` title and 95x25 `New Outfit` button retain their accepted horizontal spacing and are vertically centred in the header.
-- Passed: outfit-list top/position is unchanged.
-- Passed: outer frame shows `v2.0.24-dev`.
-- Passed: `New Outfit` still works when clicked.
-- Result: `2.0.24-dev` chrome/layout revision accepted.
+- Version/runtime head: `2.0.26-dev`, `c6fffcfd1cc6c6699305408fad8451cb248b5be0`.
+- Passed: the 15-row Outfits viewport is present, the list still starts at the accepted top position, and the extended scrollbar/trench behaves correctly without colliding with the tabs.
+- Passed: the accepted `2.0.24-dev` header/tab/version chrome remains correct.
+- Passed: About shows `About Outfitter`, `Originally designed and written by John Stephen`, and `Updated and maintained by Revenga`.
+- Passed: Gaia is included in Beta Testers; existing tester names, Special Thanks credits, and guild URLs remain present.
+- Passed: the duplicate About-page `Outfitter <version>` line is gone.
+- Result: `2.0.26-dev` UI/content follow-up accepted.
 
 ### Next Runtime Test
-- Runtime-check `2.0.26-dev` UI/content only: confirm the 15-row Outfits viewport from `2.0.25-dev` is present, its scrollbar/trench still aligns and reaches both ends correctly, and the accepted `2.0.24-dev` header/tab/version chrome is unchanged. On About, confirm there is no duplicate `Outfitter <version>` line; it shows `About Outfitter`, `Originally designed and written by John Stephen`, `Updated and maintained by Revenga`, and Beta Testers includes Gaia while all existing testers, Special Thanks names, and guild URLs remain present.
+- After the next P4 implementation slice, test Riding automatic-outfit activation/deactivation on the ClassicAPI path and verify the existing Turtle/legacy aura-tooltip Riding fallback still behaves unchanged when that capability path is unavailable.
 - Keep the residual outfit-change hitch as profiling debt; do not resume speculative timing changes without instrumentation.
 - P3 direct execution remains intentionally bounded at the accepted safe public-API cases; unsupported weapon/unequip/bank/mixed cases retain legacy fallback.
 
@@ -341,7 +341,7 @@ Audit findings:
 - **P1 — ClassicAPI observation bridge:** complete and user-verified.
 - **P2 — item identity modernization:** implemented, compiler-checked, and user-accepted at `2143a0cd29cc50a8e52d45040adacb299bf133cd`. Normal/rapid swaps, manual changes, pfUI slot-flyout changes, reload persistence, and unchanged SavedVariables schema pass. Bank-open matching, focused partial/special rechecks, and true exact-duplicate physical-instance testing remain validation debt.
 - **P3 — cursor-free executor/performance:** accepted at the current safe boundary through `2.0.18-dev`. Physical-executor slices 1–4 are user-accepted; `2.0.17-dev` materially shortened the hitch by coalescing legacy inventory reconciliation once per frame; `2.0.18-dev` restores correct partial-outfit slot ownership. The rejected `2.0.12/2.0.13` timing design stays rejected. Residual hitching is profiling debt, not a reason for more speculative timing changes.
-- **P4 — automatic-state modernization:** read-only capability audit complete. `2.0.20-dev` implements the first preservation-first bridge inside the existing `OutfitterClassicAPI` namespace: Riding state, helpful-aura name/icon/spell data, current shapeshift form ID, and `UPDATE_SHAPESHIFT_FORM` capability are exposed but not consumed. The structural gate passed on `2.0.21-dev`. `2.0.22-dev` through `2.0.26-dev` contain only user-requested UI/content follow-ups before P4 consumption resumes. Preserve legacy fallback during validation; do not add Swimming or broaden the existing form/special-outfit set.
+- **P4 — automatic-state modernization:** read-only capability audit complete. `2.0.20-dev` implements the first preservation-first bridge inside the existing `OutfitterClassicAPI` namespace: Riding state, helpful-aura name/icon/spell data, current shapeshift form ID, and `UPDATE_SHAPESHIFT_FORM` capability are exposed but not consumed. The structural gate passed on `2.0.21-dev`; the UI/content follow-ups through `2.0.26-dev` are user-accepted. Resume with Riding as the first single-consumer integration while preserving the existing Turtle/legacy fallback. Do not add Swimming or broaden the existing form/special-outfit set.
 - **P5 — paperdoll/pfUI coexistence:** remove the global `PaperDollItemSlotButton_OnClick` replacement and preserve QuickSlots via additive integration; test pfUI Equipment Manager enabled and disabled.
 - **P6 — optional C_EquipmentSet interoperability:** only after Outfitter's model/executor are stable, decide whether named Outfitter outfits should explicitly import/export/mirror user-visible ClassicAPI sets.
 - **P7 — cleanup:** remove obsolete cursor/timer/polling/tooltip paths only after their replacements are runtime-proven.
@@ -371,4 +371,4 @@ Longer-term non-goals:
 - Before first promotion, compare `dev` and `main`, remove development-only status material, apply stable TOC metadata, and preserve only intentional main/release content.
 
 ## Exact Next Step
-Runtime-check `2.0.26-dev` UI/content only: verify the 15-row Outfits viewport and extended scrollbar/trench behave correctly, the accepted `2.0.24-dev` chrome is unchanged, and the About page shows the revised John Stephen credit, new Revenga maintainer credit, Gaia in Beta Testers, no duplicate About-page version line, and no lost Special Thanks/tester/URL credits. If accepted, resume P4 with Riding as the first single-consumer slice using `OutfitterClassicAPI.GetRidingState()` when available while retaining the existing aura/tooltip Riding heuristic as the Turtle/non-capability fallback and validation protection. Do not yet consume the helpful-aura or shapeshift bridge, do not add Swimming or Turtle-only Tree/Swift Travel behavior, and do not touch Dining health/mana semantics, zone behavior, the residual hitch, 1.5-second throttle, or 0.25-second equipment retry loop.
+Implement the first P4 single-consumer slice for Riding only: use `OutfitterClassicAPI.GetRidingState()` when available to drive the existing Riding special-outfit state, while retaining the current aura/tooltip Riding heuristic as the Turtle/non-capability fallback and validation protection. Preserve the existing special-outfit ID, stack/priority semantics, and activation/deactivation behavior. Do not yet consume the helpful-aura or shapeshift bridge, do not add Swimming or Turtle-only Tree/Swift Travel behavior, and do not touch Dining health/mana semantics, zone behavior, the residual hitch, 1.5-second throttle, or 0.25-second equipment retry loop.
