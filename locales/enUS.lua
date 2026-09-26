@@ -1,7 +1,8 @@
 Outfitter_cVersion = GetAddOnMetadata("Outfitter", "Version");
 
 Outfitter_cTitle = "Outfitter";
-Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;\nOutfitter_cFrameVersion = "v"..Outfitter_cVersion;
+Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;
+Outfitter_cFrameVersion = "v"..Outfitter_cVersion;
 
 Outfitter_cNameLabel = "Name:";
 Outfitter_cCreateUsingTitle = "Optimize for:";
