@@ -4306,11 +4306,18 @@ function Outfitter_GetSpecialOutfit(pSpecialID)
 end
 
 function Outfitter_GetPlayerAuraStates()
+	local		vRidingState = nil;
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.GetRidingState then
+		vRidingState = OutfitterClassicAPI.GetRidingState();
+	end
+	
 	local		vAuraStates =
 	{
 		Dining = false,
 		Shadowform = false,
-		Riding = false,
+		Riding = vRidingState == true,
 		GhostWolf = false,
 		Feigning = false,
 		Evocate = false,
@@ -4357,7 +4364,8 @@ function Outfitter_GetPlayerAuraStates()
 				if vSpecialID then
 					vAuraStates[vSpecialID] = true;
 				
-				elseif vTextLine2
+				elseif vRidingState == nil
+				and vTextLine2
 					and (
 						string.find(vTextLine2, Outfitter_cMountSpeedFormat) or --Mount fix by Red Mage Joe
 						string.find(vTextLine2, "Riding") or
