@@ -60,6 +60,97 @@ function OutfitterClassicAPI.HasBagUpdateDelayedEvent()
 	return true;
 end
 
+-- P6 equipment-set interoperability is intentionally read-only at this
+-- boundary. C_EquipmentSet is shared user-visible state (including pfUI's
+-- Equipment Manager), so Outfitter imports explicit snapshots but never
+-- mirrors or rewrites sets behind the user's back.
+
+function OutfitterClassicAPI.CanImportEquipmentSets()
+	return type(C_EquipmentSet) == "table"
+	and type(C_EquipmentSet.GetEquipmentSetIDs) == "function"
+	and type(C_EquipmentSet.GetEquipmentSetInfo) == "function"
+	and type(C_EquipmentSet.GetIgnoredSlots) == "function"
+	and type(C_EquipmentSet.GetItemIDs) == "function"
+	and type(C_EquipmentSet.GetItemLocations) == "function"
+	and type(C_Item) == "table"
+	and type(C_Item.GetItemLink) == "function"
+	and type(C_Item.GetItemGUID) == "function";
+end
+
+function OutfitterClassicAPI.GetEquipmentSetIDs()
+	if not OutfitterClassicAPI.CanImportEquipmentSets() then
+		return nil;
+	end
+	
+	return C_EquipmentSet.GetEquipmentSetIDs();
+end
+
+function OutfitterClassicAPI.GetEquipmentSetName(pSetID)
+	if not OutfitterClassicAPI.CanImportEquipmentSets()
+	or not pSetID then
+		return nil;
+	end
+	
+	local vName = C_EquipmentSet.GetEquipmentSetInfo(pSetID);
+	return vName;
+end
+
+function OutfitterClassicAPI.GetEquipmentSetSnapshot(pSetID)
+	if not OutfitterClassicAPI.CanImportEquipmentSets()
+	or not pSetID
+	or not C_EquipmentSet.GetEquipmentSetInfo(pSetID) then
+		return nil, nil, nil;
+	end
+	
+	return C_EquipmentSet.GetIgnoredSlots(pSetID),
+	       C_EquipmentSet.GetItemIDs(pSetID),
+	       C_EquipmentSet.GetItemLocations(pSetID);
+end
+
+function OutfitterClassicAPI.GetEquipmentSetItemSnapshot(pPackedLocation)
+	if type(pPackedLocation) ~= "number"
+	or pPackedLocation <= 1
+	or not OutfitterClassicAPI.CanImportEquipmentSets() then
+		return nil, nil;
+	end
+	
+	-- C_EquipmentSet.GetItemLocations uses Blizzard's packed location
+	-- encoding. Keep this decoder narrow: only equipped slots and normal
+	-- player bags are accepted. Bank locations are deliberately rejected
+	-- because C_Item's public item-location API does not expose bank items.
+	local vIsPlayer = math.mod(math.floor(pPackedLocation / 1048576), 2) == 1;
+	local vIsBag = math.mod(math.floor(pPackedLocation / 2097152), 2) == 1;
+	local vIsBank = math.mod(math.floor(pPackedLocation / 4194304), 2) == 1;
+	
+	if not vIsPlayer
+	or vIsBank then
+		return nil, nil;
+	end
+	
+	local vSlotIndex = math.mod(pPackedLocation, 256);
+	
+	if vSlotIndex < 1 then
+		return nil, nil;
+	end
+	
+	local vItemLocation;
+	
+	if vIsBag then
+		local vBagID = math.mod(math.floor(pPackedLocation / 256), 256);
+		
+		if vBagID < 0
+		or vBagID > NUM_BAG_SLOTS then
+			return nil, nil;
+		end
+		
+		vItemLocation = {bagID = vBagID, slotIndex = vSlotIndex};
+	else
+		vItemLocation = {equipmentSlotIndex = vSlotIndex};
+	end
+	
+	return C_Item.GetItemLink(vItemLocation), C_Item.GetItemGUID(vItemLocation);
+end
+
 -- P4 automatic-state observation bridge. These helpers expose ClassicAPI facts
 -- only; legacy Outfitter state/priority logic remains the owner of decisions.
 -- A nil result means the relevant ClassicAPI capability isn't available and
@@ -3996,6 +4087,100 @@ function Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pI
 	OutfitterClassicAPI.SetRuntimeItemGUID(vItem, pItemGUID);
 end
 
+function Outfitter_GetInventorySlotNameByID(pSlotID)
+	for _, vInventorySlot in Outfitter_cSlotNames do
+		local vSlotID = GetInventorySlotInfo(vInventorySlot);
+		
+		if vSlotID == pSlotID then
+			return vInventorySlot;
+		end
+	end
+	
+	return nil;
+end
+
+function Outfitter_GetEquipmentSetOutfit(pName, pSetID)
+	local vSetName = OutfitterClassicAPI.GetEquipmentSetName(pSetID);
+	local vIgnoredSlots, vItemIDs, vItemLocations =
+		OutfitterClassicAPI.GetEquipmentSetSnapshot(pSetID);
+	
+	if not vSetName
+	or not vIgnoredSlots
+	or not vItemIDs
+	or not vItemLocations then
+		return nil, format(Outfitter_cEquipmentSetImportErrorFormat, vSetName or tostring(pSetID or "?"));
+	end
+	
+	local vIgnoredSlotMap = {};
+	
+	for _, vSlotID in vIgnoredSlots do
+		vIgnoredSlotMap[vSlotID] = true;
+	end
+	
+	local vOutfit = Outfitter_NewEmptyOutfit(pName);
+	
+	-- C_EquipmentSet represents the 19 paperdoll slots (Head through
+	-- Tabard). Outfitter's separate AmmoSlot has no C_EquipmentSet
+	-- equivalent, so an imported outfit intentionally leaves Ammo unchecked.
+	for vSlotID = 1, 19 do
+		if not vIgnoredSlotMap[vSlotID] then
+			local vInventorySlot = Outfitter_GetInventorySlotNameByID(vSlotID);
+			local vPackedLocation = vItemLocations[vSlotID];
+			
+			if not vInventorySlot then
+				return nil, format(Outfitter_cEquipmentSetImportErrorFormat, vSetName);
+			elseif vPackedLocation == nil then
+				-- A non-ignored slot omitted from GetItemLocations was empty when
+				-- the equipment set was saved. Preserve that as an explicit empty
+				-- Outfitter slot rather than treating it as unchecked.
+				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, 0, 0, "", 0);
+			elseif vPackedLocation ~= 1 then
+				-- -1 means the set item is missing. Bank locations and any other
+				-- unsupported source also fail the exact import instead of silently
+				-- degrading to item-ID-only matching.
+				local vItemID = vItemIDs[vSlotID];
+				local vItemLink, vItemGUID =
+					OutfitterClassicAPI.GetEquipmentSetItemSnapshot(vPackedLocation);
+				local vItemInfo = Outfitter_GetItemInfoFromLink(vItemLink);
+				
+				if vPackedLocation == -1
+				or not vItemID
+				or not vItemInfo
+				or not vItemGUID
+				or vItemInfo.Code ~= vItemID then
+					return nil, format(Outfitter_cEquipmentSetImportErrorFormat, vSetName);
+				end
+				
+				Outfitter_AddOutfitItem(
+					vOutfit,
+					vInventorySlot,
+					vItemInfo.Code,
+					vItemInfo.SubCode,
+					vItemInfo.Name,
+					vItemInfo.EnchantCode,
+					vItemGUID);
+			end
+		end
+	end
+	
+	-- Re-read the set locations before accepting the snapshot. This catches
+	-- an equipment/inventory change which raced the import and prevents
+	-- committing a mixed snapshot assembled from two physical states.
+	local _, _, vVerifyLocations = OutfitterClassicAPI.GetEquipmentSetSnapshot(pSetID);
+	
+	if not vVerifyLocations then
+		return nil, format(Outfitter_cEquipmentSetImportErrorFormat, vSetName);
+	end
+	
+	for vSlotID = 1, 19 do
+		if vItemLocations[vSlotID] ~= vVerifyLocations[vSlotID] then
+			return nil, format(Outfitter_cEquipmentSetImportErrorFormat, vSetName);
+		end
+	end
+	
+	return vOutfit;
+end
+
 function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID)
 	if not pSlotName then
 		Outfitter_ErrorMessage("AddOutfitStatItem: SlotName is nil for "..pItemName);
@@ -5247,6 +5432,15 @@ function OutfitterNameOutfit_Done()
 				vOutfit = Outfitter_GetInventoryOutfit(vName);
 			elseif vStatID == "EMPTY" then
 				vOutfit = Outfitter_NewEmptyOutfit(vName);
+			elseif type(vStatID) == "string"
+			and string.sub(vStatID, 1, 13) == "EQUIPMENTSET:" then
+				local vImportError;
+				vOutfit, vImportError = Outfitter_GetEquipmentSetOutfit(vName, tonumber(string.sub(vStatID, 14)));
+				
+				if not vOutfit then
+					Outfitter_ErrorMessage(vImportError or Outfitter_cEquipmentSetImportError);
+					return;
+				end
 			else
 				vOutfit = Outfitter_GenerateSmartOutfit(vName, vStatID, OutfitterItemList_GetEquippableItems(true));
 			end
@@ -5299,7 +5493,9 @@ function OutfitterNameOutfit_Update(pCheckForStatOutfit)
 		
 		if vStatID
 		and vStatID ~= 0
-		and vStatID ~= "EMPTY" then
+		and vStatID ~= "EMPTY"
+		and (type(vStatID) ~= "string"
+		     or string.sub(vStatID, 1, 13) ~= "EQUIPMENTSET:") then
 			local	vOutfit = Outfitter_GenerateSmartOutfit("temp outfit", vStatID, OutfitterItemList_GetEquippableItems(true));
 			
 			if not vOutfit
@@ -5430,14 +5626,35 @@ function OutfitterStatDropdown_Initialize()
 	local	vFrame = getglobal(UIDROPDOWNMENU_INIT_MENU);
 	
 	if UIDROPDOWNMENU_MENU_LEVEL == 2 then
-		for vStatIndex, vStatInfo in Outfitter_cItemStatInfo do
-			if vStatInfo.Category == UIDROPDOWNMENU_MENU_VALUE then
-				UIDropDownMenu_AddButton({text = vStatInfo.Name, value = vStatInfo.ID, owner = vFrame, func = OutfitterDropDown_OnClick}, UIDROPDOWNMENU_MENU_LEVEL);
+		if UIDROPDOWNMENU_MENU_VALUE == "EQUIPMENTSETS" then
+			local vSetIDs = OutfitterClassicAPI.GetEquipmentSetIDs();
+			
+			if vSetIDs then
+				for _, vSetID in vSetIDs do
+					local vSetName = OutfitterClassicAPI.GetEquipmentSetName(vSetID);
+					
+					if vSetName then
+						UIDropDownMenu_AddButton({text = vSetName, value = "EQUIPMENTSET:"..vSetID, owner = vFrame, func = OutfitterDropDown_OnClick}, UIDROPDOWNMENU_MENU_LEVEL);
+					end
+				end
+			end
+		else
+			for vStatIndex, vStatInfo in Outfitter_cItemStatInfo do
+				if vStatInfo.Category == UIDROPDOWNMENU_MENU_VALUE then
+					UIDropDownMenu_AddButton({text = vStatInfo.Name, value = vStatInfo.ID, owner = vFrame, func = OutfitterDropDown_OnClick}, UIDROPDOWNMENU_MENU_LEVEL);
+				end
 			end
 		end
 	else
 		UIDropDownMenu_AddButton({text = Outfitter_cUseCurrentOutfit, value = 0, owner = vFrame, func = OutfitterDropDown_OnClick});
 		UIDropDownMenu_AddButton({text = Outfitter_cUseEmptyOutfit, value = "EMPTY", owner = vFrame, func = OutfitterDropDown_OnClick});
+		
+		local vSetIDs = OutfitterClassicAPI.GetEquipmentSetIDs();
+		
+		if vSetIDs
+		and table.getn(vSetIDs) > 0 then
+			UIDropDownMenu_AddButton({text = Outfitter_cEquipmentSets, owner = vFrame, hasArrow = 1, value = "EQUIPMENTSETS"});
+		end
 		
 		UIDropDownMenu_AddButton({text = " ", notCheckable = true, notClickable = true});
 		

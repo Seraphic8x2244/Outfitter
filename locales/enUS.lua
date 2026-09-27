@@ -8,6 +8,7 @@ Outfitter_cNameLabel = "Name:";
 Outfitter_cCreateUsingTitle = "Optimize for:";
 Outfitter_cUseCurrentOutfit = "Use Current Outfit";
 Outfitter_cUseEmptyOutfit = "Create Empty Outfit";
+Outfitter_cEquipmentSets = "Equipment Sets";
 
 Outfitter_cOutfitterTabTitle = "Outfits";
 Outfitter_cOptionsTabTitle = "Options";
@@ -54,6 +55,8 @@ Outfitter_cItemAlreadyUsedError = "Outfitter: Can't put %s in the %s slot becaus
 Outfitter_cAddingItem = "Outfitter: Adding %s to %s outfit";
 Outfitter_cNameAlreadyUsedError = "Error: That name is already being used";
 Outfitter_cNoItemsWithStatError = "Warning: None of your items have that attribute";
+Outfitter_cEquipmentSetImportError = "Outfitter: Couldn't import that equipment set";
+Outfitter_cEquipmentSetImportErrorFormat = "Outfitter: Can't import equipment set %s because one or more non-ignored items are missing, banked, or changed. Move every set item into equipped slots or bags and try again.";
 
 Outfitter_cEnableAll = "Enable all";
 Outfitter_cEnableNone = "Enable none";
