@@ -7,7 +7,7 @@ if GetLocale() == "koKR" then
 	Outfitter_cUseCurrentOutfit = "현재 장비 세트 사용";
 	Outfitter_cUseEmptyOutfit = "빈 장비 세트 만듬";
 
-	Outfitter_cOutfitterTabTitle = "Outfitter";
+	Outfitter_cOutfitterTabTitle = "Outfits";
 	Outfitter_cOptionsTabTitle = "옵션";
 	Outfitter_cAboutTabTitle = "정보";
 
@@ -220,7 +220,7 @@ if GetLocale() == "koKR" then
 	Outfitter_cAboutTitle = "Outfitter 정보";
 	Outfitter_cAuthor = "Designed and written by John Stephen";
 	Outfitter_cTestersTitle = "Beta Testers";
-	Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Harper, Kallah and Sumitra";
+	Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Gaia, Harper, Kallah and Sumitra";
 	Outfitter_cSpecialThanksTitle = "Special thanks for their support to";
 	Outfitter_cSpecialThanksNames = "Brian, Dave, Glenn, Leah, Mark, The Mighty Pol, SFC and Forge";
 	Outfitter_cGuildURL = "http://www.starfleetclan.com";

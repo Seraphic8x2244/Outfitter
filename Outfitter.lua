@@ -1,3 +1,362 @@
+-- ClassicAPI integration boundary for Outfitter.
+--
+-- Keep extension-specific item identity and event capability checks here so
+-- the legacy outfit model and SavedVariables do not become coupled to
+-- ClassicAPI implementation details.
+
+OutfitterClassicAPI = {};
+
+local gOutfitterClassicAPI_RuntimeItemGUIDs = setmetatable({}, {__mode = "k"});
+local gOutfitterClassicAPI_OwnedEquipmentChange = nil;
+
+function OutfitterClassicAPI.SetRuntimeItemGUID(pItem, pItemGUID)
+	if not pItem then
+		return;
+	end
+
+	gOutfitterClassicAPI_RuntimeItemGUIDs[pItem] = pItemGUID;
+end
+
+function OutfitterClassicAPI.GetRuntimeItemGUID(pItem)
+	if not pItem then
+		return nil;
+	end
+
+	return gOutfitterClassicAPI_RuntimeItemGUIDs[pItem];
+end
+
+function OutfitterClassicAPI.IsAvailable()
+	return type(C_Item) == "table"
+	and type(C_Item.GetItemGUID) == "function"
+	and type(C_Item.GetItemLocation) == "function";
+end
+
+function OutfitterClassicAPI.HasPlayerEquipmentChangedEvent()
+	if not OutfitterClassicAPI.IsAvailable() then
+		return false;
+	end
+
+	if C_EventUtils
+	and C_EventUtils.IsEventValid then
+		return C_EventUtils.IsEventValid("PLAYER_EQUIPMENT_CHANGED");
+	end
+
+	-- ClassicAPI versions which provide the item identity API used above also
+	-- provide this event. The C_EventUtils check is preferred when available.
+	return true;
+end
+
+function OutfitterClassicAPI.HasBagUpdateDelayedEvent()
+	if not OutfitterClassicAPI.IsAvailable() then
+		return false;
+	end
+	
+	if C_EventUtils
+	and C_EventUtils.IsEventValid then
+		return C_EventUtils.IsEventValid("BAG_UPDATE_DELAYED");
+	end
+	
+	-- Supported ClassicAPI builds provide this coalesced bag-change event.
+	return true;
+end
+
+-- P4 automatic-state observation bridge. These helpers expose ClassicAPI facts
+-- only; legacy Outfitter state/priority logic remains the owner of decisions.
+-- A nil result means the relevant ClassicAPI capability isn't available and
+-- callers must retain the established Vanilla fallback.
+
+function OutfitterClassicAPI.GetRidingState()
+	if type(IsMounted) ~= "function" then
+		return nil;
+	end
+	
+	return IsMounted() and true or false;
+end
+
+function OutfitterClassicAPI.GetHelpfulAuraInfo(pIndex)
+	if type(C_UnitAuras) ~= "table"
+	or type(C_UnitAuras.GetBuffDataByIndex) ~= "function"
+	or not pIndex then
+		return nil;
+	end
+	
+	local vAuraData = C_UnitAuras.GetBuffDataByIndex("player", pIndex);
+	
+	if not vAuraData then
+		return nil;
+	end
+	
+	return vAuraData.name, vAuraData.icon, vAuraData.spellId;
+end
+
+function OutfitterClassicAPI.GetShapeshiftFormID()
+	if type(GetShapeshiftFormID) ~= "function" then
+		return nil;
+	end
+	
+	local vFormID = GetShapeshiftFormID();
+	
+	if type(vFormID) ~= "number" then
+		return nil;
+	end
+	
+	return vFormID;
+end
+
+function OutfitterClassicAPI.HasShapeshiftFormChangedEvent()
+	if type(GetShapeshiftFormID) ~= "function" then
+		return false;
+	end
+	
+	if C_EventUtils
+	and C_EventUtils.IsEventValid then
+		return C_EventUtils.IsEventValid("UPDATE_SHAPESHIFT_FORM");
+	end
+	
+	-- ClassicAPI builds which expose GetShapeshiftFormID also synthesize the
+	-- matching single-form change event.
+	return true;
+end
+
+
+function OutfitterClassicAPI.GetItemGUID(pItemLocation)
+	if not OutfitterClassicAPI.IsAvailable()
+	or not pItemLocation then
+		return nil;
+	end
+
+	return C_Item.GetItemGUID(pItemLocation);
+end
+
+function OutfitterClassicAPI.GetInventoryItemGUID(pSlotID)
+	if not pSlotID then
+		return nil;
+	end
+
+	return OutfitterClassicAPI.GetItemGUID({equipmentSlotIndex = pSlotID});
+end
+
+function OutfitterClassicAPI.GetBagItemGUID(pBagID, pSlotIndex)
+	if pBagID == nil
+	or not pSlotIndex then
+		return nil;
+	end
+
+	return OutfitterClassicAPI.GetItemGUID({bagID = pBagID, slotIndex = pSlotIndex});
+end
+
+function OutfitterClassicAPI.GetItemLocation(pItemGUID)
+	if not OutfitterClassicAPI.IsAvailable()
+	or not pItemGUID then
+		return nil;
+	end
+
+	return C_Item.GetItemLocation(pItemGUID);
+end
+
+function OutfitterClassicAPI.CanEquipItemToSlot()
+	return OutfitterClassicAPI.IsAvailable()
+	and type(C_Item.EquipItemByName) == "function";
+end
+
+local function OutfitterClassicAPI_StartOwnedEquipmentChange(pItemGUID, pSlotID)
+	gOutfitterClassicAPI_OwnedEquipmentChange =
+	{
+		SlotID = pSlotID,
+		ItemGUID = pItemGUID,
+	};
+	
+	C_Item.EquipItemByName(pItemGUID, pSlotID);
+end
+
+function OutfitterClassicAPI.EquipItemToSlot(pItem, pSlotID)
+	if not pItem
+	or not pSlotID
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	-- Vanilla cannot equip directly from bank storage. Leave bank-sourced
+	-- changes on Outfitter's existing bank-aware path.
+	if pItem.BagIndex
+	and (pItem.BagIndex < 0 or pItem.BagIndex > NUM_BAG_SLOTS) then
+		return false;
+	end
+	
+	local vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if not vItemGUID then
+		return false;
+	end
+	
+	OutfitterClassicAPI_StartOwnedEquipmentChange(vItemGUID, pSlotID);
+	return true;
+end
+
+function OutfitterClassicAPI.SwapEquippedItems(pItem1, pTargetSlotID1, pItem2, pTargetSlotID2)
+	if not pItem1
+	or not pItem2
+	or not pTargetSlotID1
+	or not pTargetSlotID2
+	or not pItem1.SlotName
+	or not pItem2.SlotName
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	local vSourceSlotID1 = GetInventorySlotInfo(pItem1.SlotName);
+	local vSourceSlotID2 = GetInventorySlotInfo(pItem2.SlotName);
+	
+	-- This slice handles only a true reciprocal paperdoll swap: item 1 is
+	-- currently in item 2's target slot and vice versa. One atomic swap then
+	-- completes both requested changes without any intermediate location state.
+	if vSourceSlotID1 ~= pTargetSlotID2
+	or vSourceSlotID2 ~= pTargetSlotID1 then
+		return false;
+	end
+	
+	local vItemGUID1 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem1);
+	local vItemGUID2 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem2);
+	
+	if not vItemGUID1
+	or not vItemGUID2
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID1) ~= vItemGUID1
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID2) ~= vItemGUID2 then
+		return false;
+	end
+	
+	C_Item.EquipItemByName(vItemGUID1, pTargetSlotID1);
+	return true;
+end
+
+function OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(pEquippedItem, pTargetSlotID, pBagItem, pBagTargetSlotID)
+	if not pEquippedItem
+	or not pTargetSlotID
+	or not pBagItem
+	or not pBagTargetSlotID
+	or not pEquippedItem.SlotName
+	or pBagItem.BagIndex == nil
+	or not pBagItem.BagSlotIndex
+	or pBagItem.BagIndex < 0
+	or pBagItem.BagIndex > NUM_BAG_SLOTS
+	or not OutfitterClassicAPI.CanEquipItemToSlot() then
+		return false;
+	end
+	
+	local vSourceSlotID = GetInventorySlotInfo(pEquippedItem.SlotName);
+	local vFinger0SlotID = GetInventorySlotInfo("Finger0Slot");
+	local vFinger1SlotID = GetInventorySlotInfo("Finger1Slot");
+	local vTrinket0SlotID = GetInventorySlotInfo("Trinket0Slot");
+	local vTrinket1SlotID = GetInventorySlotInfo("Trinket1Slot");
+	local vIsSupportedPair =
+		(vSourceSlotID == vFinger0SlotID and pTargetSlotID == vFinger1SlotID)
+		or (vSourceSlotID == vFinger1SlotID and pTargetSlotID == vFinger0SlotID)
+		or (vSourceSlotID == vTrinket0SlotID and pTargetSlotID == vTrinket1SlotID)
+		or (vSourceSlotID == vTrinket1SlotID and pTargetSlotID == vTrinket0SlotID);
+	
+	-- The bag replacement must fill the equipped item's original slot. That
+	-- makes the two direct operations independent: the paperdoll move cannot
+	-- relocate the later bag source, and the bag swap then parks the displaced
+	-- unwanted accessory in the bag slot it vacates.
+	if not vIsSupportedPair
+	or pBagTargetSlotID ~= vSourceSlotID then
+		return false;
+	end
+	
+	local vEquippedGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pEquippedItem);
+	local vBagGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pBagItem);
+	
+	if not vEquippedGUID
+	or not vBagGUID
+	or OutfitterClassicAPI.GetInventoryItemGUID(vSourceSlotID) ~= vEquippedGUID
+	or OutfitterClassicAPI.GetBagItemGUID(pBagItem.BagIndex, pBagItem.BagSlotIndex) ~= vBagGUID then
+		return false;
+	end
+	
+	C_Item.EquipItemByName(vEquippedGUID, pTargetSlotID);
+	C_Item.EquipItemByName(vBagGUID, pBagTargetSlotID);
+	return true;
+end
+
+
+
+function OutfitterClassicAPI.EquipItemsToSlots(pChanges)
+	if not pChanges
+	or table.getn(pChanges) < 2
+	or not OutfitterClassicAPI.CanEquipItemToSlot()
+	or gOutfitterClassicAPI_OwnedEquipmentChange then
+		return false;
+	end
+	
+	local vValidatedChanges = {};
+	local vUsedSources = {};
+	local vUsedSlots = {};
+	
+	-- Validate the complete burst before sending anything. This direct path is
+	-- deliberately limited to exact items which are still in distinct normal
+	-- bag slots. If any source has moved or become ambiguous, execute nothing
+	-- here and let Outfitter fall back to its legacy executor.
+	for _, vChange in pChanges do
+		local vItem = vChange.Item;
+		
+		if not vItem
+		or not vChange.SlotID
+		or vItem.BagIndex == nil
+		or not vItem.BagSlotIndex
+		or vItem.BagIndex < 0
+		or vItem.BagIndex > NUM_BAG_SLOTS then
+			return false;
+		end
+		
+		local vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(vItem);
+		
+		if not vItemGUID
+		or OutfitterClassicAPI.GetBagItemGUID(vItem.BagIndex, vItem.BagSlotIndex) ~= vItemGUID then
+			return false;
+		end
+		
+		local vSourceKey = tostring(vItem.BagIndex)..":"..tostring(vItem.BagSlotIndex);
+		
+		if vUsedSources[vSourceKey]
+		or vUsedSlots[vChange.SlotID] then
+			return false;
+		end
+		
+		vUsedSources[vSourceKey] = true;
+		vUsedSlots[vChange.SlotID] = true;
+		
+		table.insert(vValidatedChanges,
+		{
+			SlotID = vChange.SlotID,
+			ItemGUID = vItemGUID,
+		});
+	end
+	
+	-- All sources are independent bag slots, so these atomic bag->paperdoll
+	-- swaps can be issued back-to-back. No later operation needs to re-resolve
+	-- a source changed by an earlier swap.
+	for _, vChange in vValidatedChanges do
+		C_Item.EquipItemByName(vChange.ItemGUID, vChange.SlotID);
+	end
+	
+	return true;
+end
+
+function OutfitterClassicAPI.ObservePlayerEquipmentChanged(pSlotID)
+	local vEquipmentChange = gOutfitterClassicAPI_OwnedEquipmentChange;
+	
+	if not vEquipmentChange
+	or not pSlotID
+	or vEquipmentChange.SlotID ~= pSlotID then
+		return nil;
+	end
+	
+	local vMatched = OutfitterClassicAPI.GetInventoryItemGUID(pSlotID) == vEquipmentChange.ItemGUID;
+	gOutfitterClassicAPI_OwnedEquipmentChange = nil;
+	
+	return vMatched;
+end
+
 gOutfitter_Settings = nil;
 
 local Outfitter_cInitializationEvent = "PLAYER_ENTERING_WORLD";
@@ -512,6 +871,7 @@ local gOutfitter_IsFeigning = false;
 
 local gOutfitter_EquippedNeedsUpdate = false;
 local gOutfitter_WeaponsNeedUpdate = false;
+local gOutfitter_InventoryReconcilePending = false;
 local gOutfitter_LastEquipmentUpdateTime = 0;
 local Outfitter_cMinEquipmentUpdateInterval = 1.5;
 
@@ -523,7 +883,7 @@ local gOutfitter_EquippableItems = nil;
 local gOutfitter_Initialized = false;
 local gOutfitter_Suspended = false;
 
-local Outfitter_cMaxDisplayedItems = 14;
+local Outfitter_cMaxDisplayedItems = 15;
 
 local gOutfitter_PanelFrames =
 {
@@ -556,6 +916,36 @@ local	Outfitter_cShapeshiftSpecialIDs =
 	[Outfitter_cStealth] = {ID = "Stealth"},
 };
 
+-- ClassicAPI GetShapeshiftFormID() returns the 1.12
+-- SpellShapeshiftForm.dbc ID, not the stance-bar index. Keep this mapping
+-- limited to Outfitter's existing shapeshift automatic states.
+local	Outfitter_cShapeshiftFormSpecialID =
+{
+	[1] = "Cat",
+	[3] = "Travel",
+	[4] = "Aquatic",
+	[5] = "Bear",
+	[8] = "Bear",
+	[17] = "Battle",
+	[18] = "Defensive",
+	[19] = "Berserker",
+	[30] = "Stealth",
+	[31] = "Moonkin",
+};
+
+local	Outfitter_cShapeshiftSpecialStateIDs =
+{
+	"Battle",
+	"Defensive",
+	"Berserker",
+	"Bear",
+	"Cat",
+	"Aquatic",
+	"Travel",
+	"Moonkin",
+	"Stealth",
+};
+
 local gOutfitter_SpecialState = {};
 
 StaticPopupDialogs["OUTFITTER_CONFIRM_DELETE"] =
@@ -581,6 +971,10 @@ StaticPopupDialogs["OUTFITTER_CONFIRM_REBUILD"] =
 };
 
 function Outfitter_ToggleOutfitterFrame()
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	if Outfitter_IsOpen() then
 		OutfitterFrame:Hide();
 	else
@@ -597,9 +991,18 @@ function Outfitter_OnLoad()
 	Outfitter_RegisterEvent(this, "PLAYER_LEAVING_WORLD", Outfitter_PlayerLeavingWorld);
 	Outfitter_RegisterEvent(this, "VARIABLES_LOADED", Outfitter_VariablesLoaded);
 	
-	-- For monitoring mounted, dining and shadowform states
+	-- For monitoring mounted, dining and aura-backed automatic states
 	
 	Outfitter_RegisterEvent(this, "PLAYER_AURAS_CHANGED", Outfitter_UpdateAuraStates);
+	
+	-- ClassicAPI provides a dedicated current-form change event. Keep the
+	-- legacy aura-driven shapeshift refresh as fallback/secondary coverage.
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.HasShapeshiftFormChangedEvent
+	and OutfitterClassicAPI.HasShapeshiftFormChangedEvent() then
+		Outfitter_RegisterEvent(this, "UPDATE_SHAPESHIFT_FORM", Outfitter_UpdateShapeshiftState);
+	end
 	
 	-- For monitoring plaguelands and battlegrounds
 	
@@ -618,9 +1021,25 @@ function Outfitter_OnLoad()
 	
 	Outfitter_RegisterEvent(this, "UNIT_INVENTORY_CHANGED", Outfitter_InventoryChanged);
 	
+	-- ClassicAPI supplies the exact paperdoll slot which changed. Keep the
+	-- legacy UNIT_INVENTORY_CHANGED path during P1 and feed both signals into
+	-- the same reconciliation owner; a duplicate follow-up becomes a no-op
+	-- after the current outfit state has already been reconciled.
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.HasPlayerEquipmentChangedEvent
+	and OutfitterClassicAPI.HasPlayerEquipmentChangedEvent() then
+		Outfitter_RegisterEvent(this, "PLAYER_EQUIPMENT_CHANGED", Outfitter_PlayerEquipmentChanged);
+	end
+	
 	-- For indicating which outfits are missing items
 	
 	Outfitter_RegisterEvent(this, "BAG_UPDATE", Outfitter_BagUpdate);
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.HasBagUpdateDelayedEvent
+	and OutfitterClassicAPI.HasBagUpdateDelayedEvent() then
+		Outfitter_RegisterEvent(this, "BAG_UPDATE_DELAYED", Outfitter_BagUpdateDelayed);
+	end
 	Outfitter_RegisterEvent(this, "PLAYERBANKSLOTS_CHANGED", Outfitter_BankSlotsChanged);
 	
 	-- For monitoring bank bags
@@ -669,12 +1088,22 @@ function Outfitter_OnHide()
 end
 
 function Outfitter_OnEvent(pEvent)
-	-- Ignore all events except for entering world until initialization is
-	-- completed
+	-- Ignore normal events until initialization is completed.  On first use the
+	-- legacy code waits for PLAYER_ALIVE so the bags and inventory are ready.
+	-- Some 1.12 clients do not reliably deliver that event during login, so an
+	-- actual bag/equipment update is also accepted as a readiness signal.
 	
 	if not gOutfitter_Initialized
 	and pEvent ~= "VARIABLES_LOADED" then
-		if pEvent ~= Outfitter_cInitializationEvent then
+		local	vIsInitializationEvent = pEvent == Outfitter_cInitializationEvent;
+		
+		if not vIsInitializationEvent
+		and Outfitter_cInitializationEvent == "PLAYER_ALIVE" then
+			vIsInitializationEvent = pEvent == "BAG_UPDATE"
+			                    or pEvent == "UNIT_INVENTORY_CHANGED";
+		end
+		
+		if not vIsInitializationEvent then
 			return;
 		end
 		
@@ -684,20 +1113,36 @@ function Outfitter_OnEvent(pEvent)
 	--
 	
 	Outfitter_DispatchEvent(this, pEvent);
-	Outfitter_Update(false);
+	
+	-- BAG_UPDATE can fire repeatedly during one equipment operation. When
+	-- ClassicAPI's coalesced boundary is available, defer the visible-list
+	-- refresh until BAG_UPDATE_DELAYED while still invalidating each bag cache
+	-- immediately in Outfitter_BagUpdate.
+	if pEvent ~= "BAG_UPDATE"
+	or not OutfitterClassicAPI
+	or not OutfitterClassicAPI.HasBagUpdateDelayedEvent
+	or not OutfitterClassicAPI.HasBagUpdateDelayedEvent() then
+		Outfitter_Update(false);
+	end
 end
 
 function Outfitter_PlayerLeavingWorld()
 	-- To improve load screen performance, suspend events which are
-	-- fired repeatedly and rapidly during zoning
+	-- fired repeatedly and rapidly during zoning.  During initial startup keep
+	-- the bag/equipment signals registered so first-use initialization has a
+	-- readiness fallback if PLAYER_ALIVE is not delivered.
 	
 	gOutfitter_Suspended = true;
 	
-	Outfitter_SuspendEvent(OutfitterFrame, "BAG_UPDATE");
-	Outfitter_SuspendEvent(OutfitterFrame, "UNIT_INVENTORY_CHANGED");
+	if gOutfitter_Initialized then
+		Outfitter_SuspendEvent(OutfitterFrame, "BAG_UPDATE");
+		Outfitter_SuspendEvent(OutfitterFrame, "UNIT_INVENTORY_CHANGED");
+	end
+	
 	Outfitter_SuspendEvent(OutfitterFrame, "UPDATE_INVENTORY_ALERTS");
 	Outfitter_SuspendEvent(OutfitterFrame, "SPELLS_CHANGED");
 	Outfitter_SuspendEvent(OutfitterFrame, "PLAYER_AURAS_CHANGED");
+	Outfitter_SuspendEvent(OutfitterFrame, "UPDATE_SHAPESHIFT_FORM");
 	Outfitter_SuspendEvent(OutfitterFrame, "PLAYERBANKSLOTS_CHANGED");
 end
 
@@ -723,6 +1168,7 @@ function Outfitter_ResumeLoadScreenEvents()
 		Outfitter_ResumeEvent(OutfitterFrame, "UPDATE_INVENTORY_ALERTS");
 		Outfitter_ResumeEvent(OutfitterFrame, "SPELLS_CHANGED");
 		Outfitter_ResumeEvent(OutfitterFrame, "PLAYER_AURAS_CHANGED");
+		Outfitter_ResumeEvent(OutfitterFrame, "UPDATE_SHAPESHIFT_FORM");
 		Outfitter_ResumeEvent(OutfitterFrame, "PLAYERBANKSLOTS_CHANGED");
 		
 		Outfitter_InventoryChanged2();
@@ -782,6 +1228,12 @@ function Outfitter_BagUpdate()
 	--
 	
 	gOutfitter_DisplayIsDirty = true;
+end
+
+function Outfitter_BagUpdateDelayed()
+	-- All BAG_UPDATE events for this frame have finished. The individual bag
+	-- caches were already invalidated as they arrived, so rebuild the visible
+	-- Outfitter state once at this stable boundary instead of once per bag.
 	Outfitter_Update(false);
 end
 
@@ -909,7 +1361,26 @@ function Outfitter_InventoryChanged(pEvent)
 		return;
 	end
 	
-	Outfitter_InventoryChanged2();
+	-- Vanilla can emit this repeatedly during one multi-slot equipment change.
+	-- Collapse those synchronous notifications and reconcile once on the next
+	-- frame instead of rebuilding the complete equipment/bag view for every
+	-- individual event.
+	gOutfitter_InventoryReconcilePending = true;
+	OutfitterTimer_AdjustTimer();
+end
+
+function Outfitter_PlayerEquipmentChanged()
+	-- ClassicAPI fires this once per changed paperdoll slot. Use that precision
+	-- only to resolve Outfitter-owned direct-swap markers. Do not run the full
+	-- legacy inventory reconciliation here as well: Vanilla's existing
+	-- UNIT_INVENTORY_CHANGED event remains the single reconciliation owner.
+	-- This avoids rescanning the entire equipment/bag state once per changed
+	-- slot during large outfit changes while preserving manual/external changes
+	-- through the legacy event path.
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.ObservePlayerEquipmentChanged then
+		OutfitterClassicAPI.ObservePlayerEquipmentChanged(arg1);
+	end
 end
 
 function Outfitter_InventoryChanged2()
@@ -1009,6 +1480,10 @@ function Outfitter_OutfitIsAmmoOnly(pOutfit)
 end
 
 function Outfitter_ExecuteCommand(pCommand)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	vCommands =
 	{
 		wear = {useOutfit = true, func = Outfitter_WearOutfit},
@@ -1349,6 +1824,11 @@ function Outfitter_GetCategoryOrder()
 end
 
 function Outfitter_GetOutfitsByCategoryID(pCategoryID)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
+		return nil;
+	end
+	
 	return gOutfitter_Settings.Outfits[pCategoryID];
 end
 
@@ -1809,6 +2289,10 @@ function Outfiter_CompareOutfitNames(pOutfit1, pOutfit2)
 end
 
 function Outfitter_Update(pUpdateSlotEnables)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	if not OutfitterFrame:IsVisible() then
 		return;
 	end
@@ -2309,6 +2793,10 @@ local	gOutfitter_LastBindingTime = nil;
 local	Outfitter_cMinBindingTime = 0.75;
 
 function Outfitter_WearBoundOutfit(pBindingIndex)
+	if not gOutfitter_Initialized then
+		return;
+	end
+	
 	-- Check for the user spamming the button so prevent the outfit from
 	-- toggling if they're panicking
 	
@@ -2359,6 +2847,11 @@ function Outfitter_WearBoundOutfit(pBindingIndex)
 end
 
 function Outfitter_FindOutfit(pOutfit)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
+		return nil, nil;
+	end
+	
 	for vCategoryID, vOutfits in gOutfitter_Settings.Outfits do
 		for vOutfitIndex, vOutfit in vOutfits do
 			if vOutfit == pOutfit then
@@ -2371,7 +2864,9 @@ function Outfitter_FindOutfit(pOutfit)
 end
 
 function Outfitter_FindOutfitByName(pName)
-	if not pName
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not pName
 	or pName == "" then
 		return nil;
 	end
@@ -2393,7 +2888,10 @@ end
 -- Fishing Buddy might use it to locate specific generated outfits
 
 function Outfitter_FindOutfitByStatID(pStatID)
-	if not pStatID or pStatID == "" then
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not pStatID
+	or pStatID == "" then
 		return nil;
 	end
 
@@ -2898,6 +3396,113 @@ function Outfitter_OptimizeEquipmentChangeList(pEquipmentChangeList)
 end
 
 function Outfitter_ExecuteEquipmentChangeList(pEquipmentChangeList, pEmptyBagSlots, pExpectedEquippableItems)
+	local vNumChanges = table.getn(pEquipmentChangeList);
+	
+	-- P3 slice 1: preserve the user-verified single exact replacement path.
+	if vNumChanges == 1 then
+		local vEquipmentChange = pEquipmentChangeList[1];
+		
+		if vEquipmentChange.ItemLocation
+		and OutfitterClassicAPI
+		and OutfitterClassicAPI.EquipItemToSlot
+		and OutfitterClassicAPI.EquipItemToSlot(vEquipmentChange.ItemLocation, vEquipmentChange.SlotID) then
+			if pExpectedEquippableItems then
+				OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
+			end
+			
+			return;
+		end
+	
+	-- P3 slice 3/2.0.10: a true two-item paperdoll exchange can be
+	-- completed by one atomic direct swap. Require an exact reciprocal pair;
+	-- anything more complex falls through to the existing paths below.
+	elseif vNumChanges == 2
+	and pEquipmentChangeList[1].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation
+	and pEquipmentChangeList[1].ItemLocation.SlotName == pEquipmentChangeList[2].SlotName
+	and pEquipmentChangeList[2].ItemLocation.SlotName == pEquipmentChangeList[1].SlotName
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.SwapEquippedItems
+	and OutfitterClassicAPI.SwapEquippedItems(
+		pEquipmentChangeList[1].ItemLocation,
+		pEquipmentChangeList[1].SlotID,
+		pEquipmentChangeList[2].ItemLocation,
+		pEquipmentChangeList[2].SlotID) then
+		if pExpectedEquippableItems then
+			OutfitterItemList_SwapLocations(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[1].ItemLocation,
+				pEquipmentChangeList[2].ItemLocation);
+		end
+		
+		return;
+	
+	-- P3 slice 4/2.0.11: legacy optimization inserts an explicit empty
+	-- before a one-way ring/trinket rotation. For the exact three-change form
+	-- [empty target, equipped source -> target, bag replacement -> source],
+	-- ClassicAPI can complete the final state with two independent atomic swaps.
+	elseif vNumChanges == 3
+	and not pEquipmentChangeList[1].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation
+	and pEquipmentChangeList[2].ItemLocation.SlotName
+	and pEquipmentChangeList[3].ItemLocation
+	and pEquipmentChangeList[3].ItemLocation.BagIndex ~= nil
+	and pEquipmentChangeList[1].SlotName == pEquipmentChangeList[2].SlotName
+	and pEquipmentChangeList[3].SlotName == pEquipmentChangeList[2].ItemLocation.SlotName
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.RotatePairedAccessoryWithBagItem
+	and OutfitterClassicAPI.RotatePairedAccessoryWithBagItem(
+		pEquipmentChangeList[2].ItemLocation,
+		pEquipmentChangeList[2].SlotID,
+		pEquipmentChangeList[3].ItemLocation,
+		pEquipmentChangeList[3].SlotID) then
+		if pExpectedEquippableItems then
+			OutfitterItemList_SwapLocationWithInventorySlot(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[2].ItemLocation,
+				pEquipmentChangeList[2].SlotName);
+			OutfitterItemList_SwapLocationWithInventorySlot(
+				pExpectedEquippableItems,
+				pEquipmentChangeList[3].ItemLocation,
+				pEquipmentChangeList[3].SlotName);
+		end
+		
+		return;
+	
+	-- P3 slice 2/2.0.9: burst only exact replacements whose source items are
+	-- all still in normal bags. The adapter validates the complete list before
+	-- issuing anything; any empty slot, bank item, equipped source, moved
+	-- source or missing GUID leaves the entire list on the legacy executor.
+	elseif vNumChanges > 1
+	and OutfitterClassicAPI
+	and OutfitterClassicAPI.EquipItemsToSlots then
+		local vSequenceChanges = {};
+		
+		for _, vEquipmentChange in pEquipmentChangeList do
+			if not vEquipmentChange.ItemLocation then
+				vSequenceChanges = nil;
+				break;
+			end
+			
+			table.insert(vSequenceChanges,
+			{
+				Item = vEquipmentChange.ItemLocation,
+				SlotID = vEquipmentChange.SlotID,
+			});
+		end
+		
+		if vSequenceChanges
+		and OutfitterClassicAPI.EquipItemsToSlots(vSequenceChanges) then
+			if pExpectedEquippableItems then
+				for _, vEquipmentChange in pEquipmentChangeList do
+					OutfitterItemList_SwapLocationWithInventorySlot(pExpectedEquippableItems, vEquipmentChange.ItemLocation, vEquipmentChange.SlotName);
+				end
+			end
+			
+			return;
+		end
+	end
+	
 	for vChangeIndex, vEquipmentChange in pEquipmentChangeList do
 		if vEquipmentChange.ItemLocation then
 			Outfitter_PickupItemLocation(vEquipmentChange.ItemLocation);
@@ -3210,6 +3815,7 @@ function Outfitter_GetBagItemInfo(pBagIndex, pSlotIndex)
 	end
 	
 	vItemInfo.Texture, _, _, vItemInfo.Quality, _ = GetContainerItemInfo(pBagIndex, pSlotIndex);
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, OutfitterClassicAPI.GetBagItemGUID(pBagIndex, pSlotIndex));
 	
 	return vItemInfo;
 end
@@ -3274,8 +3880,12 @@ function Outfitter_GetInventoryItemInfo(pInventorySlot)
 		OutfitterTooltip:Hide();
 		
 		local	vAmmoItemTexture = GetInventoryItemTexture("player", vSlotID);
+		local	vItemInfo = Outfitter_FindAmmoSlotItem(vAmmoItemName, vAmmoItemTexture);
 		
-		return Outfitter_FindAmmoSlotItem(vAmmoItemName, vAmmoItemTexture);
+		-- The legacy ammo fallback identifies a bag stack by name/texture rather than
+		-- the equipped ammo instance, so don't attach that bag stack's GUID to the slot.
+		OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, nil);
+		return vItemInfo;
 	end
 	
 	local	vItemInfo = Outfitter_GetItemInfoFromLink(vItemLink);
@@ -3286,6 +3896,7 @@ function Outfitter_GetInventoryItemInfo(pInventorySlot)
 	
 	vItemInfo.Quality = GetInventoryItemQuality("player", vSlotID);
 	vItemInfo.Texture = GetInventoryItemTexture("player", vSlotID);
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItemInfo, OutfitterClassicAPI.GetInventoryItemGUID(vSlotID));
 	
 	return vItemInfo;
 end
@@ -3379,11 +3990,13 @@ function Outfitter_NewNakedOutfit(pName)
 	return vOutfit;
 end
 
-function Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode)
-	pOutfit.Items[pSlotName] = {Code = pItemCode, SubCode = pItemSubCode, Name = pItemName, EnchantCode = pItemEnchantCode};
+function Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pItemGUID)
+	local	vItem = {Code = pItemCode, SubCode = pItemSubCode, Name = pItemName, EnchantCode = pItemEnchantCode};
+	pOutfit.Items[pSlotName] = vItem;
+	OutfitterClassicAPI.SetRuntimeItemGUID(vItem, pItemGUID);
 end
 
-function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue)
+function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID)
 	if not pSlotName then
 		Outfitter_ErrorMessage("AddOutfitStatItem: SlotName is nil for "..pItemName);
 		return;
@@ -3394,11 +4007,11 @@ function Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode
 		return;
 	end
 	
-	Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode);
+	Outfitter_AddOutfitItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pItemGUID);
 	pOutfit.Items[pSlotName][pStatID] = pStatValue;
 end
 
-function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue)
+function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID)
 	local	vCurrentItem = pOutfit.Items[pSlotName];
 	local	vAlternateSlotName = Outfitter_cHalfAlternateStatSlot[pSlotName];
 	
@@ -3410,16 +4023,16 @@ function Outfitter_AddOutfitStatItemIfBetter(pOutfit, pSlotName, pItemCode, pIte
 		if vCurrentItem
 		and vCurrentItem[pStatID]
 		and vAlternateSlotName then
-			Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, vCurrentItem.Code, vCurrentItem.SubCode, vCurrentItem.Name, vCurrentItem.EnchantCode, pStatID, vCurrentItem[pStatID])
+			Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, vCurrentItem.Code, vCurrentItem.SubCode, vCurrentItem.Name, vCurrentItem.EnchantCode, pStatID, vCurrentItem[pStatID], OutfitterClassicAPI.GetRuntimeItemGUID(vCurrentItem))
 		end
 		
-		Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue);
+		Outfitter_AddOutfitStatItem(pOutfit, pSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID);
 	else
 		if not vAlternateSlotName then
 			return;
 		end
 		
-		return Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue);
+		return Outfitter_AddOutfitStatItemIfBetter(pOutfit, vAlternateSlotName, pItemCode, pItemSubCode, pItemName, pItemEnchantCode, pStatID, pStatValue, pItemGUID);
 	end
 end
 
@@ -3538,11 +4151,15 @@ function Outfitter_GetInventoryOutfit(pName, pOutfit)
 				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, 0, 0, "", 0);
 			end
 		else
+			local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(vItemInfo);
+			
 			if not vExistingItem
 			or vExistingItem.Code ~= vItemInfo.Code
 			or vExistingItem.SubCode ~= vItemInfo.SubCode
 			or vExistingItem.EnchantCode ~= vItemInfo.EnchantCode then
-				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, vItemInfo.Code, vItemInfo.SubCode, vItemInfo.Name, vItemInfo.EnchantCode);
+				Outfitter_AddOutfitItem(vOutfit, vInventorySlot, vItemInfo.Code, vItemInfo.SubCode, vItemInfo.Name, vItemInfo.EnchantCode, vItemGUID);
+			else
+				OutfitterClassicAPI.SetRuntimeItemGUID(vExistingItem, vItemGUID);
 			end
 		end
 	end
@@ -3560,8 +4177,8 @@ function Outfitter_UpdateOutfitFromInventory(pOutfit, pNewItemsOutfit)
 		
 		local	vCheckbox = getglobal("OutfitterEnable"..vInventorySlot);
 		
-		if not vCheckbox:GetChecked()
-		or not vCheckbox.IsUnknown then
+		if vCheckbox:GetChecked()
+		and not vCheckbox.IsUnknown then
 			pOutfit.Items[vInventorySlot] = vItem;
 			Outfitter_NoteMessage(format(Outfitter_cAddingItem, vItem.Name, pOutfit.Name));
 			Outfitter_UpdateOutfitCategory(pOutfit);
@@ -3714,6 +4331,12 @@ function Outfitter_SetSlotEnable(pSlotName, pEnable)
 end
 
 function Outfitter_GetSpecialOutfit(pSpecialID)
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits
+	or not gOutfitter_Settings.Outfits.Special then
+		return nil;
+	end
+	
 	for vOutfitIndex, vOutfit in gOutfitter_Settings.Outfits.Special do
 		if vOutfit.SpecialID == pSpecialID then
 			return vOutfit;
@@ -3724,11 +4347,18 @@ function Outfitter_GetSpecialOutfit(pSpecialID)
 end
 
 function Outfitter_GetPlayerAuraStates()
+	local		vRidingState = nil;
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.GetRidingState then
+		vRidingState = OutfitterClassicAPI.GetRidingState();
+	end
+	
 	local		vAuraStates =
 	{
 		Dining = false,
 		Shadowform = false,
-		Riding = false,
+		Riding = vRidingState == true,
 		GhostWolf = false,
 		Feigning = false,
 		Evocate = false,
@@ -3743,31 +4373,71 @@ function Outfitter_GetPlayerAuraStates()
 	local		vBuffIndex = 1;
 	
 	while true do
-		vTexture = UnitBuff("player", vBuffIndex);
+		local	vAuraName, vAuraIcon, vAuraSpellID = nil, nil, nil;
 		
-		if not vTexture then
-			return vAuraStates;
+		if OutfitterClassicAPI
+		and OutfitterClassicAPI.GetHelpfulAuraInfo then
+			vAuraName, vAuraIcon, vAuraSpellID = OutfitterClassicAPI.GetHelpfulAuraInfo(vBuffIndex);
 		end
 		
-		local	vStartIndex, vEndIndex, vTextureName = string.find(vTexture, "([^%\\]*)$");
+		local	vTexture = vAuraIcon;
+		
+		if not vAuraSpellID then
+			vTexture = UnitBuff("player", vBuffIndex);
+			
+			if not vTexture then
+				return vAuraStates;
+			end
+		elseif not vTexture then
+			-- Preserve the native icon fallback if ClassicAPI has the aura but
+			-- cannot resolve its icon metadata for this entry.
+			vTexture = UnitBuff("player", vBuffIndex);
+		end
+		
+		local	vTextureName = nil;
+		
+		if vTexture then
+			local	vStartIndex, vEndIndex;
+			vStartIndex, vEndIndex, vTextureName = string.find(vTexture, "([^%\\]*)$");
+		end
 		
 		--
 		
-		local	vSpecialID = gOutfitter_AuraIconSpecialID[vTextureName];
+		local	vSpecialID = nil;
+		
+		if vTextureName then
+			vSpecialID = gOutfitter_AuraIconSpecialID[vTextureName];
+		end
 		
 		if vSpecialID then
 			vAuraStates[vSpecialID] = true;
 		
 		--
 		
-		elseif not vAuraStates.Dining
+		elseif vTextureName
+		and not vAuraStates.Dining
 		and string.find(vTextureName, "INV_Drink") then
 			vAuraStates.Dining = true;
 		
 		--
 		
 		else
-			local	vTextLine1, vTextLine2 = Outfitter_GetBuffTooltipText(vBuffIndex);
+			local	vTextLine1 = vAuraName;
+			local	vTextLine2 = nil;
+			
+			-- ClassicAPI supplies the aura name directly. Keep tooltip reads only
+			-- for the native fallback, plus Riding's legacy tooltip heuristic when
+			-- IsMounted() itself isn't available.
+			if not vTextLine1
+			or vRidingState == nil then
+				local	vLegacyTextLine1, vLegacyTextLine2 = Outfitter_GetBuffTooltipText(vBuffIndex);
+				
+				if not vTextLine1 then
+					vTextLine1 = vLegacyTextLine1;
+				end
+				
+				vTextLine2 = vLegacyTextLine2;
+			end
 			
 			if vTextLine1 then
 				local	vSpecialID = gOutfitter_SpellNameSpecialID[vTextLine1];
@@ -3775,7 +4445,8 @@ function Outfitter_GetPlayerAuraStates()
 				if vSpecialID then
 					vAuraStates[vSpecialID] = true;
 				
-				elseif vTextLine2
+				elseif vRidingState == nil
+				and vTextLine2
 					and (
 						string.find(vTextLine2, Outfitter_cMountSpeedFormat) or --Mount fix by Red Mage Joe
 						string.find(vTextLine2, "Riding") or
@@ -3829,12 +4500,43 @@ function Outfitter_UpdateAuraStates()
 		end
 	end
 	
-	-- As of 1.12 aura changes are the only way to detect shapeshifts, so update those too
+	-- Keep shapeshift state synchronized too. The updater uses ClassicAPI's
+	-- direct current-form fact when available and otherwise retains the
+	-- established 1.12 form-list scan.
 	
 	Outfitter_UpdateShapeshiftState();
 end
 
 function Outfitter_UpdateShapeshiftState()
+	local	vFormID = nil;
+	
+	if OutfitterClassicAPI
+	and OutfitterClassicAPI.GetShapeshiftFormID then
+		vFormID = OutfitterClassicAPI.GetShapeshiftFormID();
+	end
+	
+	if vFormID ~= nil then
+		local	vActiveSpecialID = Outfitter_cShapeshiftFormSpecialID[vFormID];
+		
+		for _, vSpecialID in Outfitter_cShapeshiftSpecialStateIDs do
+			local	vIsActive = vSpecialID == vActiveSpecialID;
+			
+			if gOutfitter_SpecialState[vSpecialID] == nil then
+				gOutfitter_SpecialState[vSpecialID] = Outfitter_WearingSpecialOutfit(vSpecialID);
+			end
+			
+			if gOutfitter_SpecialState[vSpecialID] ~= vIsActive then
+				gOutfitter_SpecialState[vSpecialID] = vIsActive;
+				Outfitter_SetSpecialOutfitEnabled(vSpecialID, vIsActive);
+			end
+		end
+		
+		return;
+	end
+	
+	-- Native 1.12 fallback: enumerate the available forms and match their
+	-- localized names exactly as the imported Outfitter path always has.
+	
 	local	vNumForms = GetNumShapeshiftForms();
 	
 	for vIndex = 1, vNumForms do
@@ -4042,6 +4744,10 @@ function Outfitter_DeleteOutfit(pOutfit)
 end
 
 function Outfitter_AddOutfit(pOutfit)
+	if not gOutfitter_Settings then
+		return nil;
+	end
+	
 	local	vCategoryID;
 	
 	if pOutfit.SpecialID then
@@ -4112,7 +4818,7 @@ function Outfitter_FindAndAddItemsToOutfit(pOutfit, pSlotName, pItems, pEquippab
 			vInventorySlot = vItemLocation.ItemSlotName;
 		end
 		
-		Outfitter_AddOutfitItem(pOutfit, vInventorySlot, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCOde);
+		Outfitter_AddOutfitItem(pOutfit, vInventorySlot, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCOde, OutfitterClassicAPI.GetRuntimeItemGUID(vItemLocation));
 	end
 end
 
@@ -4134,7 +4840,7 @@ function Outfitter_AddItemsWithStatToOutfit(pOutfit, pStatID, pEquippableItems)
 					vSlotName = vItem.ItemSlotName;
 				end
 				
-				Outfitter_AddOutfitStatItemIfBetter(pOutfit, vSlotName, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCode, pStatID, vStatValue);
+				Outfitter_AddOutfitStatItemIfBetter(pOutfit, vSlotName, vItem.Code, vItem.SubCode, vItem.Name, vItem.EnchantCode, pStatID, vStatValue, OutfitterClassicAPI.GetRuntimeItemGUID(vItem));
 			end
 		end
 	end
@@ -4158,10 +4864,18 @@ function Outfitter_Initialize()
 	if not gOutfitter_Settings then
 		gOutfitter_Settings = {};
 		gOutfitter_Settings.Version = 7;
+	end
+	
+	-- Normalize structural fields before any migration, UI or special-outfit
+	-- code consumes them.  Older or partial SavedVariables must not turn a
+	-- valid upgrade into a chain of nil-table failures.
+	
+	if not gOutfitter_Settings.Options then
 		gOutfitter_Settings.Options = {};
+	end
+	
+	if not gOutfitter_Settings.LastOutfitStack then
 		gOutfitter_Settings.LastOutfitStack = {};
-		gOutfitter_Settings.HideHelm = {};
-		gOutfitter_Settings.HideCloak = {};
 	end
 	
 	if not gOutfitter_Settings.HideHelm then
@@ -4170,6 +4884,14 @@ function Outfitter_Initialize()
 	
 	if not gOutfitter_Settings.HideCloak then
 		gOutfitter_Settings.HideCloak = {};
+	end
+	
+	if gOutfitter_Settings.Outfits then
+		for vCategoryIndex, vCategoryID in gOutfitter_cCategoryOrder do
+			if not gOutfitter_Settings.Outfits[vCategoryID] then
+				gOutfitter_Settings.Outfits[vCategoryID] = {};
+			end
+		end
 	end
 	
 	--
@@ -4207,6 +4929,7 @@ function Outfitter_Initialize()
 	-- Hook QuickSlots into the paper doll frame
 	
 	Outfitter_HookPaperDollFrame();
+	Outfitter_CheckPfUIEquipmentManagerConflict();
 	
 	-- Done initializing
 	
@@ -4615,7 +5338,8 @@ function Outfitter_GetOutfitFromListItem(pItem)
 		return nil;
 	end
 	
-	if not gOutfitter_Settings.Outfits then
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Outfits then
 		return nil;
 	end
 	
@@ -4841,7 +5565,8 @@ function OutfitterTimer_AdjustTimer()
 	end
 	
 	if gOutfitter_EquippedNeedsUpdate
-	or gOutfitter_WeaponsNeedUpdate then
+	or gOutfitter_WeaponsNeedUpdate
+	or gOutfitter_InventoryReconcilePending then
 		vNeedTimer = true;
 	end
 	
@@ -4856,6 +5581,11 @@ end
 function OutfitterUpdateFrame_OnUpdate(pElapsed)
 	if OutfitterMinimapButton.IsDragging then
 		OutfitterMinimapButton_UpdateDragPosition();
+	end
+	
+	if gOutfitter_InventoryReconcilePending then
+		gOutfitter_InventoryReconcilePending = false;
+		Outfitter_InventoryChanged2();
 	end
 	
 	if not OutfitterUpdateFrame.Elapsed then
@@ -4873,12 +5603,14 @@ function OutfitterUpdateFrame_OnUpdate(pElapsed)
 end
 
 function OutfitterMinimapButton_MouseDown()
-	-- Remember where the cursor was in case the user drags
+	-- Remember where the cursor was in case the user drags.  Use the button's
+	-- own scale explicitly so this helper is safe when reused outside OnMouseDown.
 	
 	local	vCursorX, vCursorY = GetCursorPosition();
+	local	vScale = OutfitterMinimapButton:GetEffectiveScale();
 	
-	vCursorX = vCursorX / this:GetEffectiveScale();
-	vCursorY = vCursorY / this:GetEffectiveScale();
+	vCursorX = vCursorX / vScale;
+	vCursorY = vCursorY / vScale;
 	
 	OutfitterMinimapButton.CursorStartX = vCursorX;
 	OutfitterMinimapButton.CursorStartY = vCursorY;
@@ -4891,22 +5623,40 @@ function OutfitterMinimapButton_MouseDown()
 end
 
 function OutfitterMinimapButton_DragStart()
+	-- Do not rely on OnMouseDown having run first.  Establish the drag origin
+	-- here so IsDragging can never be true with an incomplete coordinate state.
+	OutfitterMinimapButton_MouseDown();
 	OutfitterMinimapButton.IsDragging = true;
 	OutfitterTimer_AdjustTimer();
 end
 
 function OutfitterMinimapButton_DragEnd()
 	OutfitterMinimapButton.IsDragging = false;
+	OutfitterMinimapButton.CursorStartX = nil;
+	OutfitterMinimapButton.CursorStartY = nil;
+	OutfitterMinimapButton.CenterStartX = nil;
+	OutfitterMinimapButton.CenterStartY = nil;
 	OutfitterTimer_AdjustTimer();
 end
 
 function OutfitterMinimapButton_UpdateDragPosition()
-	-- Remember where the cursor was in case the user drags
+	-- A stale drag flag must never poison the shared equipment update timer.
+	-- Cancel an incomplete drag state rather than doing arithmetic on nil.
+	
+	if not OutfitterMinimapButton.CursorStartX
+	or not OutfitterMinimapButton.CursorStartY
+	or not OutfitterMinimapButton.CenterStartX
+	or not OutfitterMinimapButton.CenterStartY then
+		OutfitterMinimapButton.IsDragging = false;
+		OutfitterTimer_AdjustTimer();
+		return;
+	end
 	
 	local	vCursorX, vCursorY = GetCursorPosition();
+	local	vScale = OutfitterMinimapButton:GetEffectiveScale();
 	
-	vCursorX = vCursorX / this:GetEffectiveScale();
-	vCursorY = vCursorY / this:GetEffectiveScale();
+	vCursorX = vCursorX / vScale;
+	vCursorY = vCursorY / vScale;
 	
 	local	vCursorDeltaX = vCursorX - OutfitterMinimapButton.CursorStartX;
 	local	vCursorDeltaY = vCursorY - OutfitterMinimapButton.CursorStartY;
@@ -5162,17 +5912,125 @@ function Outfitter_UpdateDatabaseItemCodes()
 	return vResult;
 end
 
-local	gOutfitter_PaperDollItemSlotButton_OnClick;
+function Outfitter_IsPfUIEquipmentManagerActive()
+	return pfEqMgrToggleButton
+	and pfUI_config
+	and (not pfUI_config.disabled or pfUI_config.disabled.equipmentmanager ~= "1");
+end
+
+function Outfitter_UpdatePaperDollButtonPosition()
+	OutfitterButton:ClearAllPoints();
+	
+	if Outfitter_IsPfUIEquipmentManagerActive()
+	and gOutfitter_Settings
+	and gOutfitter_Settings.Options
+	and gOutfitter_Settings.Options.PfUIEquipmentManagerChoice == "Both" then
+		OutfitterButton:SetPoint("RIGHT", pfEqMgrToggleButton, "LEFT", -4, 0);
+	else
+		OutfitterButton:SetPoint("TOPRIGHT", OutfitterButtonFrame, "TOPRIGHT", -32, -40);
+	end
+end
+
+function Outfitter_CheckPfUIEquipmentManagerConflict()
+	if not Outfitter_IsPfUIEquipmentManagerActive()
+	or not gOutfitter_Settings
+	or not gOutfitter_Settings.Options
+	or gOutfitter_Settings.Options.PfUIEquipmentManagerChoice == "Both" then
+		return;
+	end
+	
+	OutfitterPfUIConflictFrame:Show();
+end
+
+function Outfitter_PfUIConflictUseOutfitter()
+	if not pfUI_config then
+		return;
+	end
+	
+	if not pfUI_config.disabled then
+		pfUI_config.disabled = {};
+	end
+	
+	pfUI_config.disabled.equipmentmanager = "1";
+	ReloadUI();
+end
+
+function Outfitter_PfUIConflictUsePfUI()
+	for vAddonIndex = 1, GetNumAddOns() do
+		local vAddonName = GetAddOnInfo(vAddonIndex);
+		
+		if vAddonName == "Outfitter" then
+			DisableAddOn(vAddonIndex);
+			ReloadUI();
+			return;
+		end
+	end
+end
+
+function Outfitter_PfUIConflictUseBoth()
+	if not gOutfitter_Settings
+	or not gOutfitter_Settings.Options then
+		return;
+	end
+	
+	gOutfitter_Settings.Options.PfUIEquipmentManagerChoice = "Both";
+	Outfitter_UpdatePaperDollButtonPosition();
+	OutfitterPfUIConflictFrame:Hide();
+end
 
 function Outfitter_HookPaperDollFrame()
-	gOutfitter_PaperDollItemSlotButton_OnClick = PaperDollItemSlotButton_OnClick;
-	PaperDollItemSlotButton_OnClick = Outfitter_PaperDollItemSlotButton_OnClick
+	Outfitter_UpdatePaperDollButtonPosition();
+	
+	for _, vInventorySlot in Outfitter_cSlotNames do
+		local	vSlotButton = getglobal("Character"..vInventorySlot);
+		
+		if vSlotButton then
+			if vSlotButton.HookScript then
+				vSlotButton:HookScript("OnMouseDown", Outfitter_PaperDollItemSlotButton_OnMouseDown);
+				vSlotButton:HookScript("OnClick", Outfitter_PaperDollItemSlotButton_OnClick);
+			else
+				Outfitter_HookPaperDollItemSlotButton(vSlotButton);
+			end
+		end
+	end
+end
+
+function Outfitter_HookPaperDollItemSlotButton(pSlotButton)
+	local	vOriginalOnClick = pSlotButton:GetScript("OnClick");
+	
+	pSlotButton:SetScript("OnClick", function()
+		local	vSlotButton = this;
+		local	vSlotID = vSlotButton:GetID();
+		local	vSlotWasEmpty = GetInventoryItemLink("player", vSlotID) == nil;
+		
+		if vOriginalOnClick then
+			vOriginalOnClick();
+		end
+		
+		Outfitter_PaperDollItemSlotButton_OnClick(vSlotButton, arg1, vSlotWasEmpty);
+	end);
 end
 
 local	Outfitter_cMaxNumQuickSlots = 9;
 local	Outfitter_cSlotIDToInventorySlot = nil;
 
-function Outfitter_PaperDollItemSlotButton_OnClick(pButton, pIgnoreModifiers)
+function Outfitter_PaperDollItemSlotButton_OnMouseDown(pSlotButton)
+	local	vSlotButton = pSlotButton or this;
+	
+	if not vSlotButton then
+		return;
+	end
+	
+	vSlotButton.OutfitterSlotWasEmpty = GetInventoryItemLink("player", vSlotButton:GetID()) == nil;
+end
+
+function Outfitter_PaperDollItemSlotButton_OnClick(pSlotButton, pButton, pSlotWasEmpty)
+	local	vSlotButton = pSlotButton or this;
+	
+	if not vSlotButton then
+		return;
+	end
+	
 	-- Build the table to convert from slot ID to inventory slot name
 	
 	if not Outfitter_cSlotIDToInventorySlot then
@@ -5187,20 +6045,26 @@ function Outfitter_PaperDollItemSlotButton_OnClick(pButton, pIgnoreModifiers)
 	
 	--
 	
-	local	vSlotID = this:GetID();
+	local	vSlotID = vSlotButton:GetID();
 	local	vInventorySlot = Outfitter_cSlotIDToInventorySlot[vSlotID];
-	local	vItemLink = GetInventoryItemLink("player", vSlotID);
-	local	vSlotIsEmpty = vItemLink == nil;
+	local	vSlotWasEmpty = pSlotWasEmpty;
 	
-	-- Call the original function
+	if vSlotWasEmpty == nil then
+		vSlotWasEmpty = vSlotButton.OutfitterSlotWasEmpty;
+	end
 	
-	gOutfitter_PaperDollItemSlotButton_OnClick(pButton, pIgnoreModifiers);
+	vSlotButton.OutfitterSlotWasEmpty = nil;
 	
-	-- If there's an item on the cursor then open the slots otherwise
-	-- make sure they're closed
+	if vSlotWasEmpty == nil then
+		vSlotWasEmpty = GetInventoryItemLink("player", vSlotID) == nil;
+	end
+	
+	-- The paperdoll's own OnClick handler has already run. QuickSlots is
+	-- attached additively to the slot button and never replaces Blizzard's
+	-- global PaperDollItemSlotButton_OnClick function.
 	
 	if not OutfitterQuickSlots:IsVisible()
-	and (CursorHasItem() or vSlotIsEmpty) then
+	and (CursorHasItem() or vSlotWasEmpty) then
 		-- Hide the tooltip so that it isn't in the way
 		
 		GameTooltip:Hide();
@@ -5214,6 +6078,14 @@ function Outfitter_PaperDollItemSlotButton_OnClick(pButton, pIgnoreModifiers)
 end
 
 function OutfitterItemList_AddItem(pItemList, pItem)
+	-- Add the item to the GUID index
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if vItemGUID then
+		pItemList.ItemsByGUID[vItemGUID] = pItem;
+	end
+	
 	-- Add the item to the code list
 
 	local	vItemFamily = pItemList.ItemsByCode[pItem.Code];
@@ -5291,10 +6163,28 @@ function OutfitterItemList_FlushInventoryFromEquippableItems()
 end
 
 function OutfitterItemList_New()
-	return {ItemsByCode = {}, ItemsBySlot = {}, InventoryItems = nil, BagItems = {}};
+	return {ItemsByCode = {}, ItemsByGUID = {}, ItemsBySlot = {}, InventoryItems = nil, BagItems = {}};
+end
+
+function OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, pItem)
+	if not pOutfitItem
+	or not pItem then
+		return;
+	end
+	
+	OutfitterClassicAPI.SetRuntimeItemGUID(pOutfitItem, OutfitterClassicAPI.GetRuntimeItemGUID(pItem));
 end
 
 function OutfitterItemList_RemoveItem(pItemList, pItem)
+	-- Remove the item from the GUID index
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pItem);
+	
+	if vItemGUID
+	and pItemList.ItemsByGUID[vItemGUID] == pItem then
+		pItemList.ItemsByGUID[vItemGUID] = nil;
+	end
+	
 	-- Remove the item from the code list
 	
 	local	vItems = pItemList.ItemsByCode[pItem.Code];
@@ -5469,6 +6359,17 @@ function OutfitterItemList_FindItemOrAlt(pItemList, pOutfitItem, pMarkAsInUse, p
 		return vItem;
 	end
 	
+	-- If the exact runtime instance exists but is already in use, don't replace
+	-- it with a legacy alias match.
+	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+	
+	if vItemGUID
+	and pItemList
+	and pItemList.ItemsByGUID[vItemGUID] == vIgnoredItem then
+		return nil, vIgnoredItem;
+	end
+	
 	-- See if there's an alias for the item if it wasn't found
 	
 	local	vAltCode = Outfitter_cItemAliases[pOutfitItem.Code];
@@ -5477,7 +6378,14 @@ function OutfitterItemList_FindItemOrAlt(pItemList, pOutfitItem, pMarkAsInUse, p
 		return nil, vIgnoredItem;
 	end
 	
-	return OutfitterItemList_FindItem(pItemList, {Code = vAltCode}, pMarkAsInUse, true);
+	local	vAltItem, vAltIgnoredItem = OutfitterItemList_FindItem(pItemList, {Code = vAltCode}, pMarkAsInUse, true);
+	
+	if vAltItem then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vAltItem);
+		return vAltItem;
+	end
+	
+	return nil, vAltIgnoredItem or vIgnoredItem;
 end
 
 function OutfitterItemList_FindItem(pItemList, pOutfitItem, pMarkAsInUse, pAllowSubCodeWildcard)
@@ -5495,11 +6403,25 @@ function OutfitterItemList_FindItem(pItemList, pOutfitItem, pMarkAsInUse, pAllow
 end
 
 function OutfitterItemList_FindAllItemsOrAlt(pItemList, pOutfitItem, pAllowSubCodeWildcard, rItems)
+	if pItemList then
+		local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+		local	vGUIDItem = vItemGUID and pItemList.ItemsByGUID[vItemGUID];
+		
+		if vGUIDItem then
+			table.insert(rItems, vGUIDItem);
+			return 1;
+		end
+	end
+	
 	local	vNumItems = OutfitterItemList_FindAllItems(pItemList, pOutfitItem, pAllowSubCodeWildcard, rItems);
 	local	vAltCode = Outfitter_cItemAliases[pOutfitItem.Code];
 	
 	if vAltCode then
 		vNumItems = vNumItems + OutfitterItemList_FindAllItems(pItemList, {Code = vAltCode}, true, rItems);
+	end
+	
+	if vNumItems == 1 then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, rItems[1]);
 	end
 	
 	return vNumItems;
@@ -5534,6 +6456,17 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 		return nil, nil, nil, nil;
 	end
 	
+	local	vItemGUID = OutfitterClassicAPI.GetRuntimeItemGUID(pOutfitItem);
+	local	vGUIDItem = vItemGUID and pItemList.ItemsByGUID[vItemGUID];
+	
+	if vGUIDItem then
+		if vGUIDItem.IgnoreItem then
+			return nil, nil, nil, vGUIDItem;
+		end
+		
+		return vGUIDItem, nil, nil, nil;
+	end
+	
 	local	vItemFamily = pItemList.ItemsByCode[pOutfitItem.Code];
 	
 	if not vItemFamily then
@@ -5551,6 +6484,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 			if vItem.IgnoreItem then
 				vFoundIgnoredItem = vItem;
 			else
+				OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
 				return vItem, vIndex, vItemFamily, nil;
 			end
 		
@@ -5563,6 +6497,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 				if vItem.IgnoreItem then
 					vFoundIgnoredItem = vItem;
 				else
+					OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
 					return vItem, vIndex, vItemFamily;
 				end
 			
@@ -5587,6 +6522,7 @@ function OutfitterItemList_FindItemIndex(pItemList, pOutfitItem, pAllowSubCodeWi
 	
 	if vNumItemsFound == 1
 	and not vBestMatch.IgnoreItem then
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vBestMatch);
 		return vBestMatch, vBestMatchIndex, vItemFamily, nil;
 	end
 	
@@ -5702,6 +6638,14 @@ function OutfitterItemList_ItemsAreSame(pEquippableItems, pItem1, pItem2)
 		return false;
 	end
 	
+	local	vItemGUID1 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem1);
+	local	vItemGUID2 = OutfitterClassicAPI.GetRuntimeItemGUID(pItem2);
+	
+	if vItemGUID1
+	and vItemGUID2 then
+		return vItemGUID1 == vItemGUID2;
+	end
+	
 	if pItem1.Code == 0 then
 		return pItem2.Code == 0;
 	end
@@ -5751,6 +6695,7 @@ function OutfitterItemList_InventorySlotContainsItem(pEquippableItems, pInventor
 		-- If there's only one of that item then the enchant code
 		-- is disregarded so just make sure it's in the slot
 		
+		OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItems[1]);
 		return vItems[1].SlotName == pInventorySlot, vItems[1];
 	else
 		-- See if one of the items is in the slot
@@ -5760,7 +6705,12 @@ function OutfitterItemList_InventorySlotContainsItem(pEquippableItems, pInventor
 				-- Must match the enchant code if there are multiple items
 				-- in order to be considered a perfect match
 				
-				return vItem.EnchantCode == pOutfitItem.EnchantCode, vItem;
+				if vItem.EnchantCode == pOutfitItem.EnchantCode then
+					OutfitterItemList_BindRuntimeItemGUID(pOutfitItem, vItem);
+					return true, vItem;
+				end
+				
+				return false, vItem;
 			end
 		end
 		

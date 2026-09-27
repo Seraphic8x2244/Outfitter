@@ -346,7 +346,7 @@
 						</Texture>
 					</Layer>
 					<Layer level="OVERLAY">
-						<FontString name="$parentTitle" text="Outfitter_cTitleVersion" inherits="GameFontHighlight">
+						<FontString name="$parentTitle" text="Outfitter_cFrameVersion" inherits="GameFontHighlight">
 							<Anchors>
 								<Anchor point="TOP">
 									<Offset>
@@ -381,9 +381,9 @@
 								</Texture>
 								<FontString text="Outfitter_cTitle" inherits="GameFontNormalLarge">
 									<Anchors>
-										<Anchor point="TOP">
+										<Anchor point="LEFT" relativePoint="TOPLEFT">
 											<Offset>
-												<AbsDimension x="0" y="-36"/>
+												<AbsDimension x="42" y="-43"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -402,7 +402,7 @@
 										</Anchor>
 									</Anchors>
 								</Texture>
-								<Texture name="$parentButtonBarBackground" file="Interface\Addons\Outfitter\Textures\ButtonBarBackground">
+								<Texture name="$parentButtonBarBackground" hidden="true" file="Interface\Addons\Outfitter\Textures\ButtonBarBackground">
 									<Size>
 										<AbsDimension x="253" y="20"/>
 									</Size>
@@ -419,12 +419,12 @@
 						<Frames>
 							<Frame name="$parentScrollbarTrench" inherits="OutfitterScrollbarTrenchTemplate">
 								<Size>
-									<AbsDimension x="27" y="258"/>
+									<AbsDimension x="27" y="276"/>
 								</Size>
 								<Anchors>
 									<Anchor point="BOTTOMRIGHT" relativeTo="$parentButtonBarBackground" relativePoint="TOPRIGHT">
 										<Offset>
-											<AbsDimension x="0" y="1"/>
+											<AbsDimension x="0" y="-17"/>
 										</Offset>
 									</Anchor>
 								</Anchors>
@@ -503,9 +503,14 @@
 									<Anchor point="TOPLEFT" relativeTo="OutfitterItem12" relativePoint="BOTTOMLEFT" />
 								</Anchors>
 							</Button>
+							<Button name="OutfitterItem14" inherits="OutfitterItemTemplate">
+								<Anchors>
+									<Anchor point="TOPLEFT" relativeTo="OutfitterItem13" relativePoint="BOTTOMLEFT" />
+								</Anchors>
+							</Button>
 							<ScrollFrame name="$parentScrollFrame" hidden="false" inherits="FauxScrollFrameTemplate">
 								<Size>
-									<AbsDimension x="224" y="252"/>
+									<AbsDimension x="224" y="270"/>
 								</Size>
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="OutfitterItem0">
@@ -522,12 +527,12 @@
 							</ScrollFrame>
 							<Button name="OutfitterNewButton" inherits="UIPanelButtonTemplate" text="Outfitter_cNewOutfit">
 								<Size>
-									<AbsDimension x="115" y="21" />
+									<AbsDimension x="95" y="25" />
 								</Size>
 								<Anchors>
-									<Anchor point="BOTTOMRIGHT">
+									<Anchor point="RIGHT" relativePoint="TOPRIGHT">
 										<Offset>
-											<AbsDimension x="-7" y="6" />
+											<AbsDimension x="-14" y="-43" />
 										</Offset>
 									</Anchor>
 								</Anchors>
@@ -690,7 +695,10 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString name="OutfitterAboutTitleVersion" text="Outfitter_cTitleVersion" inherits="GameFontNormalLarge">
+								<FontString name="OutfitterAboutAuthor" text="Outfitter_cAuthor" inherits="GameFontHighlight">
+									<Size>
+										<AbsDimension x="230"/>
+									</Size>
 									<Anchors>
 										<Anchor point="TOP">
 											<Offset>
@@ -699,12 +707,12 @@
 										</Anchor>
 									</Anchors>
 								</FontString>
-								<FontString name="OutfitterAboutAuthor" text="Outfitter_cAuthor" inherits="GameFontHighlight">
+								<FontString name="OutfitterAboutMaintainer" text="Outfitter_cMaintainer" inherits="GameFontHighlight">
 									<Size>
 										<AbsDimension x="230"/>
 									</Size>
 									<Anchors>
-										<Anchor point="TOP" relativeTo="OutfitterAboutTitleVersion" relativePoint="BOTTOM">
+										<Anchor point="TOP" relativeTo="OutfitterAboutAuthor" relativePoint="BOTTOM">
 											<Offset>
 												<AbsDimension x="0" y="-5"/>
 											</Offset>
@@ -716,9 +724,9 @@
 										<AbsDimension x="230"/>
 									</Size>
 									<Anchors>
-										<Anchor point="TOP" relativeTo="OutfitterAboutTitleVersion" relativePoint="TOP">
+										<Anchor point="TOP" relativeTo="OutfitterAboutMaintainer" relativePoint="BOTTOM">
 											<Offset>
-												<AbsDimension x="0" y="-65"/>
+												<AbsDimension x="0" y="-20"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -1297,7 +1305,7 @@
 			</OnShow>
 		</Scripts>
 	</Frame>
-	<Button name="OutfitterMinimapButton" hidden="false" enableMouse="true" movable="true" parent="Minimap" toplevel="true">
+	<Button name="OutfitterMinimapButton" hidden="true" enableMouse="true" movable="true" parent="Minimap" toplevel="true">
 		<Size>
 			<AbsDimension x="32" y="32"/>
 		</Size>
@@ -1511,5 +1519,52 @@
 				OutfitterQuickSlots_OnEvent(event);
 			</OnEvent>
 		</Scripts>
+	</Frame>
+
+	<Frame name="OutfitterPfUIConflictFrame" parent="UIParent" toplevel="true" enableMouse="true" frameStrata="DIALOG" hidden="true">
+		<Size><AbsDimension x="520" y="150" /></Size>
+		<Anchors><Anchor point="CENTER" /></Anchors>
+		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\DialogFrame\UI-DialogBox-Border" tile="true">
+			<BackgroundInsets><AbsInset left="11" right="12" top="12" bottom="11" /></BackgroundInsets>
+			<TileSize><AbsValue val="32" /></TileSize>
+			<EdgeSize><AbsValue val="32" /></EdgeSize>
+		</Backdrop>
+		<Layers>
+			<Layer level="ARTWORK">
+				<FontString name="$parentText" text="Outfitter_cPfUIConflictMessage" inherits="GameFontHighlight">
+					<Size><AbsDimension x="480" y="72" /></Size>
+					<Anchors>
+						<Anchor point="TOP"><Offset><AbsDimension x="0" y="-20" /></Offset></Anchor>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Frames>
+			<Button name="$parentUseOutfitterButton" inherits="UIPanelButtonTemplate" text="Outfitter_cPfUIConflictUseOutfitter">
+				<Size><AbsDimension x="130" y="24" /></Size>
+				<Anchors>
+					<Anchor point="BOTTOMLEFT"><Offset><AbsDimension x="30" y="20" /></Offset></Anchor>
+				</Anchors>
+				<Scripts><OnClick>Outfitter_PfUIConflictUseOutfitter();</OnClick></Scripts>
+			</Button>
+			<Button name="$parentUsePfUIButton" inherits="UIPanelButtonTemplate" text="Outfitter_cPfUIConflictUsePfUI">
+				<Size><AbsDimension x="190" y="24" /></Size>
+				<Anchors>
+					<Anchor point="LEFT" relativeTo="$parentUseOutfitterButton" relativePoint="RIGHT">
+						<Offset><AbsDimension x="10" y="0" /></Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts><OnClick>Outfitter_PfUIConflictUsePfUI();</OnClick></Scripts>
+			</Button>
+			<Button name="$parentUseBothButton" inherits="UIPanelButtonTemplate" text="Outfitter_cPfUIConflictUseBoth">
+				<Size><AbsDimension x="110" y="24" /></Size>
+				<Anchors>
+					<Anchor point="LEFT" relativeTo="$parentUsePfUIButton" relativePoint="RIGHT">
+						<Offset><AbsDimension x="10" y="0" /></Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts><OnClick>Outfitter_PfUIConflictUseBoth();</OnClick></Scripts>
+			</Button>
+		</Frames>
 	</Frame>
 </UI>

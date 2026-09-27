@@ -1,14 +1,15 @@
-Outfitter_cVersion = "1.4";
+Outfitter_cVersion = GetAddOnMetadata("Outfitter", "Version");
 
 Outfitter_cTitle = "Outfitter";
 Outfitter_cTitleVersion = Outfitter_cTitle.." "..Outfitter_cVersion;
+Outfitter_cFrameVersion = "v"..Outfitter_cVersion;
 
 Outfitter_cNameLabel = "Name:";
 Outfitter_cCreateUsingTitle = "Optimize for:";
 Outfitter_cUseCurrentOutfit = "Use Current Outfit";
 Outfitter_cUseEmptyOutfit = "Create Empty Outfit";
 
-Outfitter_cOutfitterTabTitle = "Outfitter";
+Outfitter_cOutfitterTabTitle = "Outfits";
 Outfitter_cOptionsTabTitle = "Options";
 Outfitter_cAboutTabTitle = "About";
 
@@ -224,15 +225,21 @@ Outfitter_cEquipOutfitMessageFormat = "Outfitter: %s equipped";
 Outfitter_cUnequipOutfitMessageFormat = "Outfitter: %s unequipped";
 
 Outfitter_cAboutTitle = "About Outfitter";
-Outfitter_cAuthor = "Designed and written by John Stephen";
+Outfitter_cAuthor = "Originally designed and written by John Stephen";
+Outfitter_cMaintainer = "Updated and maintained by Revenga";
 Outfitter_cTestersTitle = "Beta Testers";
-Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Harper, Kallah and Sumitra";
+Outfitter_cTestersNames = "Airmid, Desiree, Fizzlebang, Gaia, Harper, Kallah and Sumitra";
 Outfitter_cSpecialThanksTitle = "Special thanks for their support to";
 Outfitter_cSpecialThanksNames = "Brian, Dave, Glenn, Leah, Mark, The Mighty Pol, SFC and Forge";
 Outfitter_cGuildURL = "http://www.starfleetclan.com";
 Outfitter_cGuildURL2 = "http://www.forgeguild.com";
 
 Outfitter_cOpenOutfitter = "Open Outfitter";
+
+Outfitter_cPfUIConflictMessage = "Outfitter detected pfUI Equipment Manager.\n\nBoth addons add equipment controls to the character window and visually conflict. Choose which addon you would like to use, or keep both.";
+Outfitter_cPfUIConflictUseOutfitter = "Use Outfitter";
+Outfitter_cPfUIConflictUsePfUI = "Use pfUI Equipment Manager";
+Outfitter_cPfUIConflictUseBoth = "Use Both";
 
 Outfitter_cArgentDawnOutfitDescription = "This outfit will automatically be worn whenever you're in the Plaguelands";
 Outfitter_cRidingOutfitDescription = "This outfit will automatically be worn whenever you're mounted";
