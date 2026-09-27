@@ -37,4 +37,4 @@ A substantial amount of the original fallback behaviour is intentionally still p
 
 Outfitter was originally designed and written by John Stephen.
 
-This version builds on the work preserved in the CosminPOP fork and updates it for the current Vanilla 1.12.1 addon environment.****
+This version builds on the work preserved in the CosminPOP fork and updates it for the current Vanilla 1.12.1 addon environment.
